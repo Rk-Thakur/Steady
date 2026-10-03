@@ -1,0 +1,217 @@
+// Drift column check constraints refer to the column's own getter, which the
+// analyzer reads as recursion; it is evaluated by the code generator instead.
+// ignore_for_file: recursive_getters
+
+import 'package:drift/drift.dart';
+
+import '../../core/local_date.dart';
+import '../../domain/models/models.dart';
+
+part 'database.g.dart';
+
+/// Steady's on-device database (Handoff 4 · Storage).
+///
+/// Conventions:
+/// - Money is integer minor units (cents).
+/// - Calendar dates are `YYYY-MM-DD` text ([LocalDateConverter]); instants
+///   are UTC.
+/// - Enums are stored by name, never by index, so reordering an enum can't
+///   corrupt data.
+/// - Singletons (settings, cycle plan, vault, split) are one-row tables with
+///   `id = 1`.
+@DriftDatabase(
+  tables: [
+    SettingsRows,
+    CyclePlans,
+    Categories,
+    Entries,
+    Bills,
+    Goals,
+    Vaults,
+    Splits,
+    SharedExpenses,
+    OverspendDecisions,
+  ],
+)
+class SteadyDatabase extends _$SteadyDatabase {
+  SteadyDatabase(super.executor);
+
+  @override
+  int get schemaVersion => 1;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+  );
+}
+
+class LocalDateConverter extends TypeConverter<LocalDate, String> {
+  const LocalDateConverter();
+
+  @override
+  LocalDate fromSql(String fromDb) => LocalDate.parse(fromDb);
+
+  @override
+  String toSql(LocalDate value) => value.toIso();
+}
+
+// ─── Singletons ────────────────────────────────────────────────────────────
+
+@DataClassName('SettingsRow')
+class SettingsRows extends Table {
+  IntColumn get id => integer().withDefault(const Constant(1))();
+  TextColumn get currency => textEnum<Currency>()();
+  TextColumn get payFrequency => textEnum<PayFrequency>()();
+  TextColumn get nextPayday => text().map(const LocalDateConverter())();
+  TextColumn get incomeType => textEnum<IncomeType>()();
+  TextColumn get displayName => text().nullable()();
+  IntColumn get hourlyRateCents => integer().nullable()();
+  IntColumn get weekStartsOn =>
+      integer().withDefault(const Constant(DateTime.sunday))();
+  TextColumn get theme => textEnum<ThemePreference>()();
+  BoolColumn get appLockEnabled =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get overspendStrategy => textEnum<OverspendStrategy>()();
+  BoolColumn get onboarded => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('CyclePlanRow')
+class CyclePlans extends Table {
+  IntColumn get id => integer().withDefault(const Constant(1))();
+  TextColumn get startDate => text().map(const LocalDateConverter())();
+  IntColumn get openingBalanceCents => integer()();
+  IntColumn get goalSetAsideCents => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('VaultRow')
+class Vaults extends Table {
+  IntColumn get id => integer().withDefault(const Constant(1))();
+  IntColumn get openingBalanceCents => integer()();
+  IntColumn get steadyPayWeeklyCents => integer()();
+  IntColumn get targetWeeks => integer().withDefault(const Constant(4))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('SplitRow')
+class Splits extends Table {
+  TextColumn get id => text()();
+  TextColumn get personName => text()();
+  IntColumn get yourSharePercent =>
+      integer().check(yourSharePercent.isBetweenValues(0, 100))();
+  TextColumn get method => textEnum<SplitMethod>()();
+  TextColumn get lastSettled =>
+      text().map(const LocalDateConverter()).nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// ─── Collections ───────────────────────────────────────────────────────────
+
+@DataClassName('CategoryRow')
+class Categories extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get tone => textEnum<CategoryTone>()();
+  IntColumn get monthlyLimitCents => integer().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('EntryRow')
+class Entries extends Table {
+  TextColumn get id => text()();
+  TextColumn get type => textEnum<EntryType>()();
+  IntColumn get amountCents =>
+      integer().check(amountCents.isBiggerThanValue(0))();
+
+  /// The local calendar day the entry belongs to; never re-derived from the
+  /// timestamp, so travel and clock changes don't move it (Handoff 4).
+  TextColumn get localDate => text().map(const LocalDateConverter())();
+  DateTimeColumn get createdAtUtc => dateTime()();
+  TextColumn get timeZoneId => text()();
+  TextColumn get merchant =>
+      text().withLength(max: Entry.maxMerchantLength).nullable()();
+
+  /// No foreign key: deleting a category keeps its entries (they just lose
+  /// the category), as the Edit category screen promises.
+  TextColumn get categoryId => text().nullable()();
+  TextColumn get mood => textEnum<Mood>().nullable()();
+  BoolColumn get planned => boolean().nullable()();
+  TextColumn get note => text().nullable()();
+  TextColumn get splitId => text().nullable()();
+  BoolColumn get toVault => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('BillRow')
+class Bills extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  IntColumn get amountCents => integer()();
+  TextColumn get recurrence => textEnum<Recurrence>()();
+  TextColumn get dueDate => text().map(const LocalDateConverter())();
+  BoolColumn get isEstimate => boolean().withDefault(const Constant(false))();
+  BoolColumn get isSubscription =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get needsReview => boolean().withDefault(const Constant(false))();
+  TextColumn get paidOn => text().map(const LocalDateConverter()).nullable()();
+  IntColumn get previousAmountCents => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('GoalRow')
+class Goals extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get kind => textEnum<GoalKind>()();
+  IntColumn get targetCents => integer()();
+  IntColumn get savedCents => integer()();
+  IntColumn get dailySetAsideCents => integer()();
+  TextColumn get targetDate =>
+      text().map(const LocalDateConverter()).nullable()();
+  BoolColumn get paused => boolean().withDefault(const Constant(false))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('SharedExpenseRow')
+class SharedExpenses extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  IntColumn get amountCents => integer()();
+  TextColumn get date => text().map(const LocalDateConverter())();
+  BoolColumn get paidByYou => boolean()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// S4: how a given day's overspend was handled.
+@DataClassName('OverspendDecisionRow')
+class OverspendDecisions extends Table {
+  TextColumn get localDate => text().map(const LocalDateConverter())();
+  TextColumn get strategy => textEnum<OverspendStrategy>()();
+
+  @override
+  Set<Column> get primaryKey => {localDate};
+}

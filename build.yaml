@@ -1,0 +1,10 @@
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          # Lets `dart run drift_dev make-migrations` snapshot each schema
+          # version into drift_schemas/ and generate migration tests.
+          databases:
+            steady: lib/data/db/database.dart
+          store_date_time_values_as_text: false
