@@ -24,7 +24,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     final store = StoreScope.of(context);
     final c = context.colors;
     final symbol = store.symbol;
-    final bills = store.bills.where((b) => !b.isPaid).toList()
+    final bills = store.bills.toList()
       ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
     String recurrence(Bill b) => switch (b.recurrence) {

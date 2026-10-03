@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../core/local_date.dart';
+import '../domain/cycle.dart';
 import '../domain/daily_number.dart';
 import '../domain/models/models.dart';
+import '../domain/schedule.dart';
 import 'db/budget_repository.dart';
 import 'db/database_key.dart';
 
@@ -71,6 +75,8 @@ class BudgetStore extends ChangeNotifier {
       pinVault: pinVault,
     );
     if (snapshot.isFresh) store._save((r) => r.replaceAll(store.toSnapshot()));
+    // Catch up on Vault releases and automatic cycles since the last launch.
+    store.refreshDay();
     return store;
   }
 
@@ -260,18 +266,21 @@ class BudgetStore extends ChangeNotifier {
 
   bool get isNewUser => _entries.isEmpty && _bills.isEmpty;
 
-  /// Bills in this pay cycle: paid since the cycle started, plus everything
-  /// still reserved before payday. Sorted paid first, then by due date.
-  List<Bill> get billsThisCycle {
-    final list =
-        _bills.where((b) {
-          if (b.isPaid) return !b.paidOn!.isBefore(_plan.startDate);
-          return b.isReservedBefore(nextPayday);
-        }).toList()..sort((a, b) {
-          if (a.isPaid != b.isPaid) return a.isPaid ? -1 : 1;
-          return a.dueDate.compareTo(b.dueDate);
-        });
-    return list;
+  /// Bill payments in this pay cycle: one slot per occurrence, paid ones
+  /// (since the cycle started) first, then everything still reserved before
+  /// payday. A weekly bill can appear more than once.
+  List<CycleBill> get billsThisCycle {
+    final paid = [
+      for (final b in _bills)
+        if (b.paidSince(_plan.startDate))
+          CycleBill(b, b.lastPaidOn!, paid: true),
+    ]..sort((a, b) => a.date.compareTo(b.date));
+    final due = [
+      for (final b in _bills)
+        for (final d in b.occurrencesBefore(nextPayday))
+          CycleBill(b, d, paid: false),
+    ]..sort((a, b) => a.date.compareTo(b.date));
+    return [...paid, ...due];
   }
 
   /// Unpaid bills before payday, by due date.
@@ -279,9 +288,35 @@ class BudgetStore extends ChangeNotifier {
       _bills.where((b) => b.isReservedBefore(nextPayday)).toList()
         ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
-  int get reservedBillsCents => _bills
-      .where((b) => b.isReservedBefore(nextPayday))
-      .fold(0, (sum, b) => sum + b.amountCents);
+  int get reservedBillsCents =>
+      _bills.fold(0, (sum, b) => sum + b.reservedBefore(nextPayday));
+
+  /// Payday has arrived for a regular earner and no pay is logged yet (V2),
+  /// unless they said "Not yet" today.
+  bool get isAwaitingPay =>
+      _payPromptSnoozedOn != today &&
+      awaitingPay(
+        today: today,
+        nextPayday: nextPayday,
+        frequency: _settings.payFrequency,
+      );
+  LocalDate? _payPromptSnoozedOn;
+
+  /// V2 "Not yet": ask again tomorrow; the number stays the same.
+  void snoozePayPrompt() {
+    _payPromptSnoozedOn = today;
+    notifyListeners();
+  }
+
+  /// The day the current cycle started automatically or from logged pay, so
+  /// Today can say so once. Null after it's dismissed or on another day.
+  LocalDate? get newCycleStartedOn => _newCycleOn == today ? _newCycleOn : null;
+  LocalDate? _newCycleOn;
+
+  void dismissNewCycle() {
+    _newCycleOn = null;
+    notifyListeners();
+  }
 
   int get billsNeedingReview => _bills.where((b) => b.needsReview).length;
 
@@ -322,8 +357,130 @@ class BudgetStore extends ChangeNotifier {
 
   void addEntry(Entry entry) {
     _entries.add(entry);
-    notifyListeners();
     _save((r) => r.upsertEntry(entry));
+    if (incomeStartsCycle(
+      entry: entry,
+      today: today,
+      nextPayday: nextPayday,
+      frequency: _settings.payFrequency,
+    )) {
+      _startNewCycle(today, lastPayday: nextPayday);
+    }
+    notifyListeners();
+  }
+
+  /// "Mark as paid": logs the payment as a spend and moves the bill to its
+  /// next due date (estimates take the real amount; a fixed bill that came in
+  /// higher is flagged).
+  void payBill(Bill bill, {required int amountCents}) {
+    final now = DateTime.now();
+    addEntry(
+      Entry(
+        id: newId('bill-payment'),
+        type: EntryType.spend,
+        amountCents: amountCents,
+        localDate: today,
+        createdAtUtc: now.toUtc(),
+        timeZoneId: now.timeZoneName,
+        merchant: bill.name,
+        categoryId: categoryById('bills') != null ? 'bills' : null,
+        planned: true,
+        billId: bill.id,
+      ),
+    );
+    updateBill(bill.paid(paidOn: today, paidCents: amountCents));
+  }
+
+  /// V2 "It won't come": the expected pay isn't coming; start the next cycle
+  /// with the money there is.
+  void payWontCome() {
+    _startNewCycle(today, lastPayday: nextPayday);
+    notifyListeners();
+  }
+
+  /// Brings the store up to today: Paycheck Vault releases for each Monday
+  /// that passed, and automatic cycles for pay that varies, applied in date
+  /// order (so a long absence is caught up correctly). Called at launch, when
+  /// the app returns to the foreground, and at midnight.
+  void refreshDay() {
+    final t = today;
+    var changed = false;
+    // Safety bound: a couple of years of weekly events.
+    for (var guard = 0; guard < 120; guard++) {
+      final release = releasesDue(_vault, t).firstOrNull;
+      final autoCycle =
+          _settings.payFrequency == PayFrequency.varies &&
+              !t.isBefore(nextPayday)
+          ? nextPayday
+          : null;
+      if (release == null && autoCycle == null) break;
+      if (release != null &&
+          (autoCycle == null || !autoCycle.isBefore(release))) {
+        _releaseFromVault(release);
+      } else {
+        _startNewCycle(autoCycle!);
+      }
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  /// The clock moved on (midnight, or the app came back to the foreground):
+  /// catch up and redraw, since every daily figure depends on today's date.
+  void onClockTick() {
+    refreshDay();
+    notifyListeners();
+  }
+
+  void _releaseFromVault(LocalDate monday) {
+    final amount = math.min(
+      _vault.steadyPayWeeklyCents,
+      math.max(0, vaultBalanceCents),
+    );
+    if (amount > 0) {
+      final entry = Entry(
+        id: newId('vault-release'),
+        type: EntryType.income,
+        amountCents: amount,
+        localDate: monday,
+        createdAtUtc: DateTime.utc(monday.year, monday.month, monday.day, 6),
+        timeZoneId: DateTime.now().timeZoneName,
+        merchant: 'Paycheck Vault',
+        fromVault: true,
+      );
+      _entries.add(entry);
+      _save((r) => r.upsertEntry(entry));
+    }
+    _vault = _vault.copyWith(lastReleaseDate: () => monday);
+    final vault = _vault;
+    _save((r) => r.saveVault(vault));
+  }
+
+  void _startNewCycle(LocalDate start, {LocalDate? lastPayday}) {
+    final next = startNewCycle(
+      start: start,
+      current: _plan,
+      entries: _entries,
+      goals: _goals,
+      frequency: _settings.payFrequency,
+      lastPayday: lastPayday,
+    );
+    _plan = next.plan;
+    _settings = _settings.copyWith(nextPayday: next.nextPayday);
+    _goals
+      ..clear()
+      ..addAll(next.goals);
+    _newCycleOn = start;
+    final plan = _plan;
+    final settings = _settings;
+    final goals = List.of(_goals);
+    _save((r) async {
+      await r.savePlan(plan);
+      await r.saveSettings(settings);
+      for (var i = 0; i < goals.length; i++) {
+        await r.upsertGoal(goals[i], sortOrder: i);
+      }
+    });
   }
 
   void updateEntry(Entry entry) {
@@ -400,6 +557,10 @@ class BudgetStore extends ChangeNotifier {
   }
 
   void updateVault(Vault vault) {
+    if (vault.isActive && vault.lastReleaseDate == null) {
+      // First release is next Monday, not one for this week already.
+      vault = vault.copyWith(lastReleaseDate: () => mondayOnOrBefore(today));
+    }
     _vault = vault;
     notifyListeners();
     _save((r) => r.saveVault(vault));
@@ -468,11 +629,15 @@ class BudgetStore extends ChangeNotifier {
     final todaysDelta = _entries
         .where((e) => e.localDate == today)
         .fold<int>(0, (s, e) => s + e.spendableDeltaCents);
+    final setAside = goalSetAsides(
+      _goals,
+      today.daysUntil(payday),
+    ).values.fold(0, (a, b) => a + b);
     final plan = CyclePlan(
       startDate: today,
       // Money "now" already includes today's entries, so add them back.
       openingBalanceCents: balanceCents - todaysDelta,
-      goalSetAsideCents: _plan.goalSetAsideCents,
+      goalSetAsideCents: setAside,
     );
     _plan = plan;
     _settings = _settings.copyWith(nextPayday: payday);
@@ -544,6 +709,7 @@ class BudgetStore extends ChangeNotifier {
       Mood? mood,
       int hoursAgo = 0,
       String? splitId,
+      String? billId,
     }) => Entry(
       id: id,
       type: EntryType.spend,
@@ -556,6 +722,7 @@ class BudgetStore extends ChangeNotifier {
       planned: planned,
       mood: mood,
       splitId: splitId,
+      billId: billId,
     );
 
     Bill bill(
@@ -573,8 +740,11 @@ class BudgetStore extends ChangeNotifier {
       name: name,
       amountCents: cents,
       recurrence: Recurrence.monthly,
-      dueDate: today.addDays(dueInDays),
-      paidOn: paid ? cycleStart : null,
+      // A paid bill's due date is already its next occurrence.
+      dueDate: paid
+          ? addMonths(today.addDays(dueInDays), 1)
+          : today.addDays(dueInDays),
+      lastPaidOn: paid ? cycleStart : null,
       isEstimate: estimate,
       isSubscription: sub,
       needsReview: review,
@@ -589,7 +759,15 @@ class BudgetStore extends ChangeNotifier {
 
     final entries = <Entry>[
       for (final b in paidBills)
-        spend('paid-${b.id}', b.name, b.amountCents, 2, 'bills', hoursAgo: 3),
+        spend(
+          'paid-${b.id}',
+          b.name,
+          b.amountCents,
+          2,
+          'bills',
+          hoursAgo: 3,
+          billId: b.id,
+        ),
       spend('groceries', 'Groceries', 11240, 2, 'food', splitId: 'split'),
       spend(
         'taco',
@@ -716,9 +894,10 @@ class BudgetStore extends ChangeNotifier {
           targetDate: today.addDays(64),
         ),
       ],
-      vault: const Vault(
+      vault: Vault(
         openingBalanceCents: 130000,
         steadyPayWeeklyCents: 78000,
+        lastReleaseDate: mondayOnOrBefore(today),
       ),
       split: ExpenseSplit(
         id: 'split',
@@ -758,4 +937,13 @@ class BudgetStore extends ChangeNotifier {
       ],
     );
   }
+}
+
+/// One bill occurrence in the current cycle (Today's bills card).
+@immutable
+class CycleBill {
+  const CycleBill(this.bill, this.date, {required this.paid});
+  final Bill bill;
+  final LocalDate date;
+  final bool paid;
 }

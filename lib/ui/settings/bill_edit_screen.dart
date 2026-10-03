@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
+import '../../core/money.dart';
+import '../../domain/schedule.dart';
 import '../../data/store_scope.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
@@ -88,7 +90,7 @@ class _BillEditScreenState extends State<BillEditScreen> {
         isEstimate: _estimate,
         isSubscription:
             _existing?.isSubscription ?? widget.prefill?.subscription ?? false,
-        paidOn: _existing?.paidOn,
+        lastPaidOn: _existing?.lastPaidOn,
       );
       _existing == null ? store.addBill(bill) : store.updateBill(bill);
       Navigator.of(context).pop();
@@ -102,6 +104,7 @@ class _BillEditScreenState extends State<BillEditScreen> {
         onPressed: name.isEmpty || cents == null || cents <= 0 ? null : save,
       ),
       children: [
+        if (_existing != null) _PayCard(bill: _existing!),
         SteadyField(
           label: 'Bill name',
           controller: _name,
@@ -161,6 +164,135 @@ class _BillEditScreenState extends State<BillEditScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The bill's current occurrence, with "Mark as paid".
+class _PayCard extends StatelessWidget {
+  const _PayCard({required this.bill});
+  final Bill bill;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final c = context.colors;
+    final latest =
+        store.bills.where((b) => b.id == bill.id).firstOrNull ?? bill;
+    final overdue = latest.isOverdueOn(store.today);
+    final amount =
+        '${latest.isEstimate ? '~' : ''}${formatMoney(latest.amountCents, symbol: store.symbol)}';
+    return Panel(
+      borderColor: overdue ? c.dangerFg : null,
+      borderWidth: overdue ? 2 : 1,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      overdue
+                          ? 'Overdue since ${formatShortDay(latest.dueDate)}'
+                          : 'Next due ${formatShortDay(latest.dueDate)}',
+                      style: SteadyType.caption.copyWith(
+                        color: overdue ? c.dangerFg : c.muted,
+                      ),
+                    ),
+                    Text(
+                      amount,
+                      style: SteadyType.title.copyWith(fontSize: 24),
+                    ),
+                  ],
+                ),
+              ),
+              SteadyButton(
+                'Mark as paid',
+                height: SteadySize.buttonCompact,
+                expand: false,
+                onPressed: () => _confirmPayment(context, latest),
+              ),
+            ],
+          ),
+          if (latest.lastPaidOn != null) ...[
+            const SizedBox(height: SteadySpace.s2),
+            Text(
+              'Last paid ${formatShortDay(latest.lastPaidOn!)}',
+              style: SteadyType.caption.copyWith(
+                fontWeight: FontWeight.w500,
+                color: c.muted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static Future<void> _confirmPayment(BuildContext context, Bill bill) async {
+    final store = StoreScope.of(context);
+    final controller = TextEditingController(
+      text: centsToField(bill.amountCents),
+    );
+    final paid = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          SteadySpace.s5,
+          0,
+          SteadySpace.s5,
+          MediaQuery.viewInsetsOf(sheet).bottom + SteadySpace.s6,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Pay ${bill.name}',
+              style: SteadyType.title.copyWith(fontSize: 24),
+            ),
+            const SizedBox(height: SteadySpace.s2),
+            Text(
+              bill.isEstimate
+                  ? 'Enter the real amount. It becomes the estimate for next time.'
+                  : 'Logged as a spend today. The bill moves to its next due date.',
+              style: SteadyType.body.copyWith(
+                fontSize: 14,
+                color: sheet.colors.muted,
+              ),
+            ),
+            const SizedBox(height: SteadySpace.s4),
+            SteadyField(
+              label: 'Amount paid',
+              amount: true,
+              controller: controller,
+              autofocus: bill.isEstimate,
+            ),
+            const SizedBox(height: SteadySpace.s4),
+            SteadyButton(
+              'Mark as paid',
+              onPressed: () {
+                final cents = parseCents(controller.text);
+                if (cents != null && cents > 0) Navigator.of(sheet).pop(cents);
+              },
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(controller.dispose);
+    if (paid == null || !context.mounted) return;
+    store.payBill(bill, amountCents: paid);
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${bill.name} paid. Next due ${formatShortDay(nextOccurrence(bill.dueDate, bill.recurrence))}.',
+        ),
+      ),
     );
   }
 }

@@ -162,7 +162,8 @@ void main() {
         bills: [
           _bill('due', 12800, const LocalDate(2026, 10, 8)),
           _bill('overdue', 1000, const LocalDate(2026, 9, 30)),
-          _bill('paid', 5000, const LocalDate(2026, 10, 5), paidOn: oct2),
+          // Paid on Oct 2, so its next due date is already a month later.
+          _bill('paid', 5000, const LocalDate(2026, 11, 5), lastPaidOn: oct2),
           _bill('on payday', 7000, payday),
           _bill('after', 3000, const LocalDate(2026, 10, 20)),
         ],
@@ -170,6 +171,29 @@ void main() {
 
       expect(input.unpaidBillsBeforePaydayCents, 12800 + 1000);
     });
+  });
+
+  test('a weekly bill due twice before payday is reserved twice', () {
+    final input = DailyNumberCalculator.inputFromLedger(
+      today: oct2,
+      nextPayday: payday,
+      plan: CyclePlan(
+        startDate: oct2,
+        openingBalanceCents: 100000,
+        goalSetAsideCents: 0,
+      ),
+      entries: const [],
+      bills: [
+        _bill(
+          'cleaner',
+          4000,
+          const LocalDate(2026, 10, 4),
+          recurrence: Recurrence.weekly,
+        ),
+      ],
+    );
+    // Oct 4 and Oct 11 both fall before the Oct 15 payday.
+    expect(input.unpaidBillsBeforePaydayCents, 8000);
   });
 
   group('edge cases', () {
@@ -247,11 +271,17 @@ Entry _income(String id, int cents, LocalDate date, {bool toVault = false}) =>
       toVault: toVault,
     );
 
-Bill _bill(String id, int cents, LocalDate due, {LocalDate? paidOn}) => Bill(
+Bill _bill(
+  String id,
+  int cents,
+  LocalDate due, {
+  LocalDate? lastPaidOn,
+  Recurrence recurrence = Recurrence.monthly,
+}) => Bill(
   id: id,
   name: id,
   amountCents: cents,
-  recurrence: Recurrence.monthly,
+  recurrence: recurrence,
   dueDate: due,
-  paidOn: paidOn,
+  lastPaidOn: lastPaidOn,
 );

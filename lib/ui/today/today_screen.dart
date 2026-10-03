@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/date_format.dart';
+import '../../core/local_date.dart';
 import '../../core/money.dart';
 import '../../data/store_scope.dart';
 import '../../domain/daily_number.dart';
@@ -31,7 +32,7 @@ class TodayScreen extends StatelessWidget {
     final store = StoreScope.of(context);
     // Edge states replace the normal Today layout (Step 4 · Edge states).
     if (store.isNewUser) return TodayEmptyBody(onLogSpend: onLogSpend);
-    if (store.today.isAfter(store.nextPayday)) return const PaidPromptBody();
+    if (store.isAwaitingPay) return const PaidPromptBody();
     if (store.missedDays.length >= 2) return const TodayCatchUpBody();
 
     final number = store.dailyNumber;
@@ -61,6 +62,12 @@ class TodayScreen extends StatelessWidget {
       gap: SteadySpace.sectionGap,
       children: [
         const TodayHeader(),
+        if (store.newCycleStartedOn != null)
+          _NewCycleBanner(
+            number: number,
+            payday: store.nextPayday,
+            symbol: symbol,
+          ),
         if (store.saveError != null)
           SoftBanner(
             tone: BannerTone.danger,
@@ -424,6 +431,45 @@ class _BreakdownSheet extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Shown on the day a new pay cycle starts (pay logged, "It won't come", or
+/// an automatic cycle for pay that varies).
+class _NewCycleBanner extends StatelessWidget {
+  const _NewCycleBanner({
+    required this.number,
+    required this.payday,
+    required this.symbol,
+  });
+  final DailyNumber number;
+  final LocalDate payday;
+  final String symbol;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    return SoftBanner(
+      icon: Icons.autorenew_rounded,
+      child: Row(
+        children: [
+          Expanded(
+            child: LeadText(
+              lead: 'New pay cycle.',
+              body:
+                  '${formatMoney(number.dailyAllowanceCents, symbol: symbol)} a day until '
+                  '${formatShortDay(payday)}. Bills and goals are set aside again.',
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            onPressed: store.dismissNewCycle,
+          ),
+        ],
       ),
     );
   }

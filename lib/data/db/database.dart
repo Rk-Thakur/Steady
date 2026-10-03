@@ -6,6 +6,8 @@ import 'package:drift/drift.dart';
 
 import '../../core/local_date.dart';
 import '../../domain/models/models.dart';
+import '../../domain/schedule.dart';
+import 'database.steps.dart';
 
 part 'database.g.dart';
 
@@ -37,11 +39,38 @@ class SteadyDatabase extends _$SteadyDatabase {
   SteadyDatabase(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
+    onUpgrade: stepByStep(
+      from1To2: (m, schema) async {
+        // Bills: "this occurrence is paid" becomes "last paid on", and a paid
+        // bill's due date moves to its next (unpaid) occurrence.
+        await m.renameColumn(schema.bills, 'paid_on', schema.bills.lastPaidOn);
+        final paid = await customSelect(
+          'SELECT id, due_date, recurrence FROM bills WHERE last_paid_on IS NOT NULL',
+        ).get();
+        for (final row in paid) {
+          final next = nextOccurrence(
+            LocalDate.parse(row.read<String>('due_date')),
+            Recurrence.values.byName(row.read<String>('recurrence')),
+          );
+          await customUpdate(
+            'UPDATE bills SET due_date = ? WHERE id = ?',
+            variables: [
+              Variable.withString(next.toIso()),
+              Variable.withString(row.read<String>('id')),
+            ],
+          );
+        }
+        // Paycheck Vault weekly releases.
+        await m.addColumn(schema.entries, schema.entries.fromVault);
+        await m.addColumn(schema.entries, schema.entries.billId);
+        await m.addColumn(schema.vaults, schema.vaults.lastReleaseDate);
+      },
+    ),
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
@@ -99,6 +128,10 @@ class Vaults extends Table {
   IntColumn get steadyPayWeeklyCents => integer()();
   IntColumn get targetWeeks => integer().withDefault(const Constant(4))();
 
+  /// v2: Monday of the latest steady-pay release.
+  TextColumn get lastReleaseDate =>
+      text().map(const LocalDateConverter()).nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -155,6 +188,13 @@ class Entries extends Table {
   TextColumn get splitId => text().nullable()();
   BoolColumn get toVault => boolean().withDefault(const Constant(false))();
 
+  /// v2: a weekly Paycheck Vault release into the daily number.
+  BoolColumn get fromVault => boolean().withDefault(const Constant(false))();
+
+  /// v2: the bill this spend paid (bill payments don't count against
+  /// today's allowance).
+  TextColumn get billId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -170,7 +210,11 @@ class Bills extends Table {
   BoolColumn get isSubscription =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get needsReview => boolean().withDefault(const Constant(false))();
-  TextColumn get paidOn => text().map(const LocalDateConverter()).nullable()();
+
+  /// v2: was `paid_on` ("this occurrence is paid"); now when the most
+  /// recent occurrence was paid, with [dueDate] the next unpaid one.
+  TextColumn get lastPaidOn =>
+      text().map(const LocalDateConverter()).nullable()();
   IntColumn get previousAmountCents => integer().nullable()();
 
   @override

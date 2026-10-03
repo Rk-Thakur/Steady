@@ -1591,6 +1591,30 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, EntryRow> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _fromVaultMeta = const VerificationMeta(
+    'fromVault',
+  );
+  @override
+  late final GeneratedColumn<bool> fromVault = GeneratedColumn<bool>(
+    'from_vault',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("from_vault" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _billIdMeta = const VerificationMeta('billId');
+  @override
+  late final GeneratedColumn<String> billId = GeneratedColumn<String>(
+    'bill_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1606,6 +1630,8 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, EntryRow> {
     note,
     splitId,
     toVault,
+    fromVault,
+    billId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1693,6 +1719,18 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, EntryRow> {
         toVault.isAcceptableOrUnknown(data['to_vault']!, _toVaultMeta),
       );
     }
+    if (data.containsKey('from_vault')) {
+      context.handle(
+        _fromVaultMeta,
+        fromVault.isAcceptableOrUnknown(data['from_vault']!, _fromVaultMeta),
+      );
+    }
+    if (data.containsKey('bill_id')) {
+      context.handle(
+        _billIdMeta,
+        billId.isAcceptableOrUnknown(data['bill_id']!, _billIdMeta),
+      );
+    }
     return context;
   }
 
@@ -1760,6 +1798,14 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, EntryRow> {
         DriftSqlType.bool,
         data['${effectivePrefix}to_vault'],
       )!,
+      fromVault: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}from_vault'],
+      )!,
+      billId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bill_id'],
+      ),
     );
   }
 
@@ -1798,6 +1844,13 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
   final String? note;
   final String? splitId;
   final bool toVault;
+
+  /// v2: a weekly Paycheck Vault release into the daily number.
+  final bool fromVault;
+
+  /// v2: the bill this spend paid (bill payments don't count against
+  /// today's allowance).
+  final String? billId;
   const EntryRow({
     required this.id,
     required this.type,
@@ -1812,6 +1865,8 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
     this.note,
     this.splitId,
     required this.toVault,
+    required this.fromVault,
+    this.billId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1847,6 +1902,10 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
       map['split_id'] = Variable<String>(splitId);
     }
     map['to_vault'] = Variable<bool>(toVault);
+    map['from_vault'] = Variable<bool>(fromVault);
+    if (!nullToAbsent || billId != null) {
+      map['bill_id'] = Variable<String>(billId);
+    }
     return map;
   }
 
@@ -1873,6 +1932,10 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
           ? const Value.absent()
           : Value(splitId),
       toVault: Value(toVault),
+      fromVault: Value(fromVault),
+      billId: billId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(billId),
     );
   }
 
@@ -1899,6 +1962,8 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
       note: serializer.fromJson<String?>(json['note']),
       splitId: serializer.fromJson<String?>(json['splitId']),
       toVault: serializer.fromJson<bool>(json['toVault']),
+      fromVault: serializer.fromJson<bool>(json['fromVault']),
+      billId: serializer.fromJson<String?>(json['billId']),
     );
   }
   @override
@@ -1922,6 +1987,8 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
       'note': serializer.toJson<String?>(note),
       'splitId': serializer.toJson<String?>(splitId),
       'toVault': serializer.toJson<bool>(toVault),
+      'fromVault': serializer.toJson<bool>(fromVault),
+      'billId': serializer.toJson<String?>(billId),
     };
   }
 
@@ -1939,6 +2006,8 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
     Value<String?> note = const Value.absent(),
     Value<String?> splitId = const Value.absent(),
     bool? toVault,
+    bool? fromVault,
+    Value<String?> billId = const Value.absent(),
   }) => EntryRow(
     id: id ?? this.id,
     type: type ?? this.type,
@@ -1953,6 +2022,8 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
     note: note.present ? note.value : this.note,
     splitId: splitId.present ? splitId.value : this.splitId,
     toVault: toVault ?? this.toVault,
+    fromVault: fromVault ?? this.fromVault,
+    billId: billId.present ? billId.value : this.billId,
   );
   EntryRow copyWithCompanion(EntriesCompanion data) {
     return EntryRow(
@@ -1977,6 +2048,8 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
       note: data.note.present ? data.note.value : this.note,
       splitId: data.splitId.present ? data.splitId.value : this.splitId,
       toVault: data.toVault.present ? data.toVault.value : this.toVault,
+      fromVault: data.fromVault.present ? data.fromVault.value : this.fromVault,
+      billId: data.billId.present ? data.billId.value : this.billId,
     );
   }
 
@@ -1995,7 +2068,9 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
           ..write('planned: $planned, ')
           ..write('note: $note, ')
           ..write('splitId: $splitId, ')
-          ..write('toVault: $toVault')
+          ..write('toVault: $toVault, ')
+          ..write('fromVault: $fromVault, ')
+          ..write('billId: $billId')
           ..write(')'))
         .toString();
   }
@@ -2015,6 +2090,8 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
     note,
     splitId,
     toVault,
+    fromVault,
+    billId,
   );
   @override
   bool operator ==(Object other) =>
@@ -2032,7 +2109,9 @@ class EntryRow extends DataClass implements Insertable<EntryRow> {
           other.planned == this.planned &&
           other.note == this.note &&
           other.splitId == this.splitId &&
-          other.toVault == this.toVault);
+          other.toVault == this.toVault &&
+          other.fromVault == this.fromVault &&
+          other.billId == this.billId);
 }
 
 class EntriesCompanion extends UpdateCompanion<EntryRow> {
@@ -2049,6 +2128,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
   final Value<String?> note;
   final Value<String?> splitId;
   final Value<bool> toVault;
+  final Value<bool> fromVault;
+  final Value<String?> billId;
   final Value<int> rowid;
   const EntriesCompanion({
     this.id = const Value.absent(),
@@ -2064,6 +2145,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
     this.note = const Value.absent(),
     this.splitId = const Value.absent(),
     this.toVault = const Value.absent(),
+    this.fromVault = const Value.absent(),
+    this.billId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   EntriesCompanion.insert({
@@ -2080,6 +2163,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
     this.note = const Value.absent(),
     this.splitId = const Value.absent(),
     this.toVault = const Value.absent(),
+    this.fromVault = const Value.absent(),
+    this.billId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        type = Value(type),
@@ -2101,6 +2186,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
     Expression<String>? note,
     Expression<String>? splitId,
     Expression<bool>? toVault,
+    Expression<bool>? fromVault,
+    Expression<String>? billId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2117,6 +2204,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
       if (note != null) 'note': note,
       if (splitId != null) 'split_id': splitId,
       if (toVault != null) 'to_vault': toVault,
+      if (fromVault != null) 'from_vault': fromVault,
+      if (billId != null) 'bill_id': billId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2135,6 +2224,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
     Value<String?>? note,
     Value<String?>? splitId,
     Value<bool>? toVault,
+    Value<bool>? fromVault,
+    Value<String?>? billId,
     Value<int>? rowid,
   }) {
     return EntriesCompanion(
@@ -2151,6 +2242,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
       note: note ?? this.note,
       splitId: splitId ?? this.splitId,
       toVault: toVault ?? this.toVault,
+      fromVault: fromVault ?? this.fromVault,
+      billId: billId ?? this.billId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2203,6 +2296,12 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
     if (toVault.present) {
       map['to_vault'] = Variable<bool>(toVault.value);
     }
+    if (fromVault.present) {
+      map['from_vault'] = Variable<bool>(fromVault.value);
+    }
+    if (billId.present) {
+      map['bill_id'] = Variable<String>(billId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2225,6 +2324,8 @@ class EntriesCompanion extends UpdateCompanion<EntryRow> {
           ..write('note: $note, ')
           ..write('splitId: $splitId, ')
           ..write('toVault: $toVault, ')
+          ..write('fromVault: $fromVault, ')
+          ..write('billId: $billId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2329,14 +2430,14 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, BillRow> {
     defaultValue: const Constant(false),
   );
   @override
-  late final GeneratedColumnWithTypeConverter<LocalDate?, String> paidOn =
+  late final GeneratedColumnWithTypeConverter<LocalDate?, String> lastPaidOn =
       GeneratedColumn<String>(
-        'paid_on',
+        'last_paid_on',
         aliasedName,
         true,
         type: DriftSqlType.string,
         requiredDuringInsert: false,
-      ).withConverter<LocalDate?>($BillsTable.$converterpaidOnn);
+      ).withConverter<LocalDate?>($BillsTable.$converterlastPaidOnn);
   static const VerificationMeta _previousAmountCentsMeta =
       const VerificationMeta('previousAmountCents');
   @override
@@ -2357,7 +2458,7 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, BillRow> {
     isEstimate,
     isSubscription,
     needsReview,
-    paidOn,
+    lastPaidOn,
     previousAmountCents,
   ];
   @override
@@ -2474,10 +2575,10 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, BillRow> {
         DriftSqlType.bool,
         data['${effectivePrefix}needs_review'],
       )!,
-      paidOn: $BillsTable.$converterpaidOnn.fromSql(
+      lastPaidOn: $BillsTable.$converterlastPaidOnn.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
-          data['${effectivePrefix}paid_on'],
+          data['${effectivePrefix}last_paid_on'],
         ),
       ),
       previousAmountCents: attachedDatabase.typeMapping.read(
@@ -2496,10 +2597,10 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, BillRow> {
       const EnumNameConverter<Recurrence>(Recurrence.values);
   static TypeConverter<LocalDate, String> $converterdueDate =
       const LocalDateConverter();
-  static TypeConverter<LocalDate, String> $converterpaidOn =
+  static TypeConverter<LocalDate, String> $converterlastPaidOn =
       const LocalDateConverter();
-  static TypeConverter<LocalDate?, String?> $converterpaidOnn =
-      NullAwareTypeConverter.wrap($converterpaidOn);
+  static TypeConverter<LocalDate?, String?> $converterlastPaidOnn =
+      NullAwareTypeConverter.wrap($converterlastPaidOn);
 }
 
 class BillRow extends DataClass implements Insertable<BillRow> {
@@ -2511,7 +2612,10 @@ class BillRow extends DataClass implements Insertable<BillRow> {
   final bool isEstimate;
   final bool isSubscription;
   final bool needsReview;
-  final LocalDate? paidOn;
+
+  /// v2: was `paid_on` ("this occurrence is paid"); now when the most
+  /// recent occurrence was paid, with [dueDate] the next unpaid one.
+  final LocalDate? lastPaidOn;
   final int? previousAmountCents;
   const BillRow({
     required this.id,
@@ -2522,7 +2626,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
     required this.isEstimate,
     required this.isSubscription,
     required this.needsReview,
-    this.paidOn,
+    this.lastPaidOn,
     this.previousAmountCents,
   });
   @override
@@ -2544,9 +2648,9 @@ class BillRow extends DataClass implements Insertable<BillRow> {
     map['is_estimate'] = Variable<bool>(isEstimate);
     map['is_subscription'] = Variable<bool>(isSubscription);
     map['needs_review'] = Variable<bool>(needsReview);
-    if (!nullToAbsent || paidOn != null) {
-      map['paid_on'] = Variable<String>(
-        $BillsTable.$converterpaidOnn.toSql(paidOn),
+    if (!nullToAbsent || lastPaidOn != null) {
+      map['last_paid_on'] = Variable<String>(
+        $BillsTable.$converterlastPaidOnn.toSql(lastPaidOn),
       );
     }
     if (!nullToAbsent || previousAmountCents != null) {
@@ -2565,9 +2669,9 @@ class BillRow extends DataClass implements Insertable<BillRow> {
       isEstimate: Value(isEstimate),
       isSubscription: Value(isSubscription),
       needsReview: Value(needsReview),
-      paidOn: paidOn == null && nullToAbsent
+      lastPaidOn: lastPaidOn == null && nullToAbsent
           ? const Value.absent()
-          : Value(paidOn),
+          : Value(lastPaidOn),
       previousAmountCents: previousAmountCents == null && nullToAbsent
           ? const Value.absent()
           : Value(previousAmountCents),
@@ -2590,7 +2694,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
       isEstimate: serializer.fromJson<bool>(json['isEstimate']),
       isSubscription: serializer.fromJson<bool>(json['isSubscription']),
       needsReview: serializer.fromJson<bool>(json['needsReview']),
-      paidOn: serializer.fromJson<LocalDate?>(json['paidOn']),
+      lastPaidOn: serializer.fromJson<LocalDate?>(json['lastPaidOn']),
       previousAmountCents: serializer.fromJson<int?>(
         json['previousAmountCents'],
       ),
@@ -2610,7 +2714,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
       'isEstimate': serializer.toJson<bool>(isEstimate),
       'isSubscription': serializer.toJson<bool>(isSubscription),
       'needsReview': serializer.toJson<bool>(needsReview),
-      'paidOn': serializer.toJson<LocalDate?>(paidOn),
+      'lastPaidOn': serializer.toJson<LocalDate?>(lastPaidOn),
       'previousAmountCents': serializer.toJson<int?>(previousAmountCents),
     };
   }
@@ -2624,7 +2728,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
     bool? isEstimate,
     bool? isSubscription,
     bool? needsReview,
-    Value<LocalDate?> paidOn = const Value.absent(),
+    Value<LocalDate?> lastPaidOn = const Value.absent(),
     Value<int?> previousAmountCents = const Value.absent(),
   }) => BillRow(
     id: id ?? this.id,
@@ -2635,7 +2739,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
     isEstimate: isEstimate ?? this.isEstimate,
     isSubscription: isSubscription ?? this.isSubscription,
     needsReview: needsReview ?? this.needsReview,
-    paidOn: paidOn.present ? paidOn.value : this.paidOn,
+    lastPaidOn: lastPaidOn.present ? lastPaidOn.value : this.lastPaidOn,
     previousAmountCents: previousAmountCents.present
         ? previousAmountCents.value
         : this.previousAmountCents,
@@ -2660,7 +2764,9 @@ class BillRow extends DataClass implements Insertable<BillRow> {
       needsReview: data.needsReview.present
           ? data.needsReview.value
           : this.needsReview,
-      paidOn: data.paidOn.present ? data.paidOn.value : this.paidOn,
+      lastPaidOn: data.lastPaidOn.present
+          ? data.lastPaidOn.value
+          : this.lastPaidOn,
       previousAmountCents: data.previousAmountCents.present
           ? data.previousAmountCents.value
           : this.previousAmountCents,
@@ -2678,7 +2784,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
           ..write('isEstimate: $isEstimate, ')
           ..write('isSubscription: $isSubscription, ')
           ..write('needsReview: $needsReview, ')
-          ..write('paidOn: $paidOn, ')
+          ..write('lastPaidOn: $lastPaidOn, ')
           ..write('previousAmountCents: $previousAmountCents')
           ..write(')'))
         .toString();
@@ -2694,7 +2800,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
     isEstimate,
     isSubscription,
     needsReview,
-    paidOn,
+    lastPaidOn,
     previousAmountCents,
   );
   @override
@@ -2709,7 +2815,7 @@ class BillRow extends DataClass implements Insertable<BillRow> {
           other.isEstimate == this.isEstimate &&
           other.isSubscription == this.isSubscription &&
           other.needsReview == this.needsReview &&
-          other.paidOn == this.paidOn &&
+          other.lastPaidOn == this.lastPaidOn &&
           other.previousAmountCents == this.previousAmountCents);
 }
 
@@ -2722,7 +2828,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
   final Value<bool> isEstimate;
   final Value<bool> isSubscription;
   final Value<bool> needsReview;
-  final Value<LocalDate?> paidOn;
+  final Value<LocalDate?> lastPaidOn;
   final Value<int?> previousAmountCents;
   final Value<int> rowid;
   const BillsCompanion({
@@ -2734,7 +2840,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
     this.isEstimate = const Value.absent(),
     this.isSubscription = const Value.absent(),
     this.needsReview = const Value.absent(),
-    this.paidOn = const Value.absent(),
+    this.lastPaidOn = const Value.absent(),
     this.previousAmountCents = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -2747,7 +2853,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
     this.isEstimate = const Value.absent(),
     this.isSubscription = const Value.absent(),
     this.needsReview = const Value.absent(),
-    this.paidOn = const Value.absent(),
+    this.lastPaidOn = const Value.absent(),
     this.previousAmountCents = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -2764,7 +2870,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
     Expression<bool>? isEstimate,
     Expression<bool>? isSubscription,
     Expression<bool>? needsReview,
-    Expression<String>? paidOn,
+    Expression<String>? lastPaidOn,
     Expression<int>? previousAmountCents,
     Expression<int>? rowid,
   }) {
@@ -2777,7 +2883,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
       if (isEstimate != null) 'is_estimate': isEstimate,
       if (isSubscription != null) 'is_subscription': isSubscription,
       if (needsReview != null) 'needs_review': needsReview,
-      if (paidOn != null) 'paid_on': paidOn,
+      if (lastPaidOn != null) 'last_paid_on': lastPaidOn,
       if (previousAmountCents != null)
         'previous_amount_cents': previousAmountCents,
       if (rowid != null) 'rowid': rowid,
@@ -2793,7 +2899,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
     Value<bool>? isEstimate,
     Value<bool>? isSubscription,
     Value<bool>? needsReview,
-    Value<LocalDate?>? paidOn,
+    Value<LocalDate?>? lastPaidOn,
     Value<int?>? previousAmountCents,
     Value<int>? rowid,
   }) {
@@ -2806,7 +2912,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
       isEstimate: isEstimate ?? this.isEstimate,
       isSubscription: isSubscription ?? this.isSubscription,
       needsReview: needsReview ?? this.needsReview,
-      paidOn: paidOn ?? this.paidOn,
+      lastPaidOn: lastPaidOn ?? this.lastPaidOn,
       previousAmountCents: previousAmountCents ?? this.previousAmountCents,
       rowid: rowid ?? this.rowid,
     );
@@ -2843,9 +2949,9 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
     if (needsReview.present) {
       map['needs_review'] = Variable<bool>(needsReview.value);
     }
-    if (paidOn.present) {
-      map['paid_on'] = Variable<String>(
-        $BillsTable.$converterpaidOnn.toSql(paidOn.value),
+    if (lastPaidOn.present) {
+      map['last_paid_on'] = Variable<String>(
+        $BillsTable.$converterlastPaidOnn.toSql(lastPaidOn.value),
       );
     }
     if (previousAmountCents.present) {
@@ -2868,7 +2974,7 @@ class BillsCompanion extends UpdateCompanion<BillRow> {
           ..write('isEstimate: $isEstimate, ')
           ..write('isSubscription: $isSubscription, ')
           ..write('needsReview: $needsReview, ')
-          ..write('paidOn: $paidOn, ')
+          ..write('lastPaidOn: $lastPaidOn, ')
           ..write('previousAmountCents: $previousAmountCents, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3498,11 +3604,21 @@ class $VaultsTable extends Vaults with TableInfo<$VaultsTable, VaultRow> {
     defaultValue: const Constant(4),
   );
   @override
+  late final GeneratedColumnWithTypeConverter<LocalDate?, String>
+  lastReleaseDate = GeneratedColumn<String>(
+    'last_release_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  ).withConverter<LocalDate?>($VaultsTable.$converterlastReleaseDaten);
+  @override
   List<GeneratedColumn> get $columns => [
     id,
     openingBalanceCents,
     steadyPayWeeklyCents,
     targetWeeks,
+    lastReleaseDate,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3575,6 +3691,12 @@ class $VaultsTable extends Vaults with TableInfo<$VaultsTable, VaultRow> {
         DriftSqlType.int,
         data['${effectivePrefix}target_weeks'],
       )!,
+      lastReleaseDate: $VaultsTable.$converterlastReleaseDaten.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}last_release_date'],
+        ),
+      ),
     );
   }
 
@@ -3582,6 +3704,11 @@ class $VaultsTable extends Vaults with TableInfo<$VaultsTable, VaultRow> {
   $VaultsTable createAlias(String alias) {
     return $VaultsTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<LocalDate, String> $converterlastReleaseDate =
+      const LocalDateConverter();
+  static TypeConverter<LocalDate?, String?> $converterlastReleaseDaten =
+      NullAwareTypeConverter.wrap($converterlastReleaseDate);
 }
 
 class VaultRow extends DataClass implements Insertable<VaultRow> {
@@ -3589,11 +3716,15 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
   final int openingBalanceCents;
   final int steadyPayWeeklyCents;
   final int targetWeeks;
+
+  /// v2: Monday of the latest steady-pay release.
+  final LocalDate? lastReleaseDate;
   const VaultRow({
     required this.id,
     required this.openingBalanceCents,
     required this.steadyPayWeeklyCents,
     required this.targetWeeks,
+    this.lastReleaseDate,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3602,6 +3733,11 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
     map['opening_balance_cents'] = Variable<int>(openingBalanceCents);
     map['steady_pay_weekly_cents'] = Variable<int>(steadyPayWeeklyCents);
     map['target_weeks'] = Variable<int>(targetWeeks);
+    if (!nullToAbsent || lastReleaseDate != null) {
+      map['last_release_date'] = Variable<String>(
+        $VaultsTable.$converterlastReleaseDaten.toSql(lastReleaseDate),
+      );
+    }
     return map;
   }
 
@@ -3611,6 +3747,9 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
       openingBalanceCents: Value(openingBalanceCents),
       steadyPayWeeklyCents: Value(steadyPayWeeklyCents),
       targetWeeks: Value(targetWeeks),
+      lastReleaseDate: lastReleaseDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastReleaseDate),
     );
   }
 
@@ -3628,6 +3767,7 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
         json['steadyPayWeeklyCents'],
       ),
       targetWeeks: serializer.fromJson<int>(json['targetWeeks']),
+      lastReleaseDate: serializer.fromJson<LocalDate?>(json['lastReleaseDate']),
     );
   }
   @override
@@ -3638,6 +3778,7 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
       'openingBalanceCents': serializer.toJson<int>(openingBalanceCents),
       'steadyPayWeeklyCents': serializer.toJson<int>(steadyPayWeeklyCents),
       'targetWeeks': serializer.toJson<int>(targetWeeks),
+      'lastReleaseDate': serializer.toJson<LocalDate?>(lastReleaseDate),
     };
   }
 
@@ -3646,11 +3787,15 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
     int? openingBalanceCents,
     int? steadyPayWeeklyCents,
     int? targetWeeks,
+    Value<LocalDate?> lastReleaseDate = const Value.absent(),
   }) => VaultRow(
     id: id ?? this.id,
     openingBalanceCents: openingBalanceCents ?? this.openingBalanceCents,
     steadyPayWeeklyCents: steadyPayWeeklyCents ?? this.steadyPayWeeklyCents,
     targetWeeks: targetWeeks ?? this.targetWeeks,
+    lastReleaseDate: lastReleaseDate.present
+        ? lastReleaseDate.value
+        : this.lastReleaseDate,
   );
   VaultRow copyWithCompanion(VaultsCompanion data) {
     return VaultRow(
@@ -3664,6 +3809,9 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
       targetWeeks: data.targetWeeks.present
           ? data.targetWeeks.value
           : this.targetWeeks,
+      lastReleaseDate: data.lastReleaseDate.present
+          ? data.lastReleaseDate.value
+          : this.lastReleaseDate,
     );
   }
 
@@ -3673,14 +3821,20 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
           ..write('id: $id, ')
           ..write('openingBalanceCents: $openingBalanceCents, ')
           ..write('steadyPayWeeklyCents: $steadyPayWeeklyCents, ')
-          ..write('targetWeeks: $targetWeeks')
+          ..write('targetWeeks: $targetWeeks, ')
+          ..write('lastReleaseDate: $lastReleaseDate')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, openingBalanceCents, steadyPayWeeklyCents, targetWeeks);
+  int get hashCode => Object.hash(
+    id,
+    openingBalanceCents,
+    steadyPayWeeklyCents,
+    targetWeeks,
+    lastReleaseDate,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3688,7 +3842,8 @@ class VaultRow extends DataClass implements Insertable<VaultRow> {
           other.id == this.id &&
           other.openingBalanceCents == this.openingBalanceCents &&
           other.steadyPayWeeklyCents == this.steadyPayWeeklyCents &&
-          other.targetWeeks == this.targetWeeks);
+          other.targetWeeks == this.targetWeeks &&
+          other.lastReleaseDate == this.lastReleaseDate);
 }
 
 class VaultsCompanion extends UpdateCompanion<VaultRow> {
@@ -3696,17 +3851,20 @@ class VaultsCompanion extends UpdateCompanion<VaultRow> {
   final Value<int> openingBalanceCents;
   final Value<int> steadyPayWeeklyCents;
   final Value<int> targetWeeks;
+  final Value<LocalDate?> lastReleaseDate;
   const VaultsCompanion({
     this.id = const Value.absent(),
     this.openingBalanceCents = const Value.absent(),
     this.steadyPayWeeklyCents = const Value.absent(),
     this.targetWeeks = const Value.absent(),
+    this.lastReleaseDate = const Value.absent(),
   });
   VaultsCompanion.insert({
     this.id = const Value.absent(),
     required int openingBalanceCents,
     required int steadyPayWeeklyCents,
     this.targetWeeks = const Value.absent(),
+    this.lastReleaseDate = const Value.absent(),
   }) : openingBalanceCents = Value(openingBalanceCents),
        steadyPayWeeklyCents = Value(steadyPayWeeklyCents);
   static Insertable<VaultRow> custom({
@@ -3714,6 +3872,7 @@ class VaultsCompanion extends UpdateCompanion<VaultRow> {
     Expression<int>? openingBalanceCents,
     Expression<int>? steadyPayWeeklyCents,
     Expression<int>? targetWeeks,
+    Expression<String>? lastReleaseDate,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3722,6 +3881,7 @@ class VaultsCompanion extends UpdateCompanion<VaultRow> {
       if (steadyPayWeeklyCents != null)
         'steady_pay_weekly_cents': steadyPayWeeklyCents,
       if (targetWeeks != null) 'target_weeks': targetWeeks,
+      if (lastReleaseDate != null) 'last_release_date': lastReleaseDate,
     });
   }
 
@@ -3730,12 +3890,14 @@ class VaultsCompanion extends UpdateCompanion<VaultRow> {
     Value<int>? openingBalanceCents,
     Value<int>? steadyPayWeeklyCents,
     Value<int>? targetWeeks,
+    Value<LocalDate?>? lastReleaseDate,
   }) {
     return VaultsCompanion(
       id: id ?? this.id,
       openingBalanceCents: openingBalanceCents ?? this.openingBalanceCents,
       steadyPayWeeklyCents: steadyPayWeeklyCents ?? this.steadyPayWeeklyCents,
       targetWeeks: targetWeeks ?? this.targetWeeks,
+      lastReleaseDate: lastReleaseDate ?? this.lastReleaseDate,
     );
   }
 
@@ -3756,6 +3918,11 @@ class VaultsCompanion extends UpdateCompanion<VaultRow> {
     if (targetWeeks.present) {
       map['target_weeks'] = Variable<int>(targetWeeks.value);
     }
+    if (lastReleaseDate.present) {
+      map['last_release_date'] = Variable<String>(
+        $VaultsTable.$converterlastReleaseDaten.toSql(lastReleaseDate.value),
+      );
+    }
     return map;
   }
 
@@ -3765,7 +3932,8 @@ class VaultsCompanion extends UpdateCompanion<VaultRow> {
           ..write('id: $id, ')
           ..write('openingBalanceCents: $openingBalanceCents, ')
           ..write('steadyPayWeeklyCents: $steadyPayWeeklyCents, ')
-          ..write('targetWeeks: $targetWeeks')
+          ..write('targetWeeks: $targetWeeks, ')
+          ..write('lastReleaseDate: $lastReleaseDate')
           ..write(')'))
         .toString();
   }
@@ -5549,6 +5717,8 @@ typedef $$EntriesTableCreateCompanionBuilder = EntriesCompanion Function({
   Value<String?> note,
   Value<String?> splitId,
   Value<bool> toVault,
+  Value<bool> fromVault,
+  Value<String?> billId,
   Value<int> rowid,
 });
 typedef $$EntriesTableUpdateCompanionBuilder = EntriesCompanion Function({
@@ -5565,6 +5735,8 @@ typedef $$EntriesTableUpdateCompanionBuilder = EntriesCompanion Function({
   Value<String?> note,
   Value<String?> splitId,
   Value<bool> toVault,
+  Value<bool> fromVault,
+  Value<String?> billId,
   Value<int> rowid,
 });
 
@@ -5644,6 +5816,16 @@ class $$EntriesTableFilterComposer
     column: $table.toVault,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnFilters<bool> get fromVault => $composableBuilder(
+    column: $table.fromVault,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get billId => $composableBuilder(
+    column: $table.billId,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$EntriesTableOrderingComposer
@@ -5719,6 +5901,16 @@ class $$EntriesTableOrderingComposer
     column: $table.toVault,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get fromVault => $composableBuilder(
+    column: $table.fromVault,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get billId => $composableBuilder(
+    column: $table.billId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$EntriesTableAnnotationComposer
@@ -5776,6 +5968,12 @@ class $$EntriesTableAnnotationComposer
 
   GeneratedColumn<bool> get toVault =>
       $composableBuilder(column: $table.toVault, builder: (column) => column);
+
+  GeneratedColumn<bool> get fromVault =>
+      $composableBuilder(column: $table.fromVault, builder: (column) => column);
+
+  GeneratedColumn<String> get billId =>
+      $composableBuilder(column: $table.billId, builder: (column) => column);
 }
 
 class $$EntriesTableTableManager
@@ -5819,6 +6017,8 @@ class $$EntriesTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String?> splitId = const Value.absent(),
                 Value<bool> toVault = const Value.absent(),
+                Value<bool> fromVault = const Value.absent(),
+                Value<String?> billId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EntriesCompanion(
                 id: id,
@@ -5834,6 +6034,8 @@ class $$EntriesTableTableManager
                 note: note,
                 splitId: splitId,
                 toVault: toVault,
+                fromVault: fromVault,
+                billId: billId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5851,6 +6053,8 @@ class $$EntriesTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String?> splitId = const Value.absent(),
                 Value<bool> toVault = const Value.absent(),
+                Value<bool> fromVault = const Value.absent(),
+                Value<String?> billId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EntriesCompanion.insert(
                 id: id,
@@ -5866,6 +6070,8 @@ class $$EntriesTableTableManager
                 note: note,
                 splitId: splitId,
                 toVault: toVault,
+                fromVault: fromVault,
+                billId: billId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -5908,7 +6114,7 @@ typedef $$BillsTableCreateCompanionBuilder = BillsCompanion Function({
   Value<bool> isEstimate,
   Value<bool> isSubscription,
   Value<bool> needsReview,
-  Value<LocalDate?> paidOn,
+  Value<LocalDate?> lastPaidOn,
   Value<int?> previousAmountCents,
   Value<int> rowid,
 });
@@ -5921,7 +6127,7 @@ typedef $$BillsTableUpdateCompanionBuilder = BillsCompanion Function({
   Value<bool> isEstimate,
   Value<bool> isSubscription,
   Value<bool> needsReview,
-  Value<LocalDate?> paidOn,
+  Value<LocalDate?> lastPaidOn,
   Value<int?> previousAmountCents,
   Value<int> rowid,
 });
@@ -5977,11 +6183,11 @@ class $$BillsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnWithTypeConverterFilters<LocalDate?, LocalDate, String> get paidOn =>
-      $composableBuilder(
-        column: $table.paidOn,
-        builder: (column) => ColumnWithTypeConverterFilters(column),
-      );
+  ColumnWithTypeConverterFilters<LocalDate?, LocalDate, String>
+  get lastPaidOn => $composableBuilder(
+    column: $table.lastPaidOn,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
 
   ColumnFilters<int> get previousAmountCents => $composableBuilder(
     column: $table.previousAmountCents,
@@ -6038,8 +6244,8 @@ class $$BillsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get paidOn => $composableBuilder(
-    column: $table.paidOn,
+  ColumnOrderings<String> get lastPaidOn => $composableBuilder(
+    column: $table.lastPaidOn,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6093,8 +6299,11 @@ class $$BillsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumnWithTypeConverter<LocalDate?, String> get paidOn =>
-      $composableBuilder(column: $table.paidOn, builder: (column) => column);
+  GeneratedColumnWithTypeConverter<LocalDate?, String> get lastPaidOn =>
+      $composableBuilder(
+        column: $table.lastPaidOn,
+        builder: (column) => column,
+      );
 
   GeneratedColumn<int> get previousAmountCents => $composableBuilder(
     column: $table.previousAmountCents,
@@ -6138,7 +6347,7 @@ class $$BillsTableTableManager
                 Value<bool> isEstimate = const Value.absent(),
                 Value<bool> isSubscription = const Value.absent(),
                 Value<bool> needsReview = const Value.absent(),
-                Value<LocalDate?> paidOn = const Value.absent(),
+                Value<LocalDate?> lastPaidOn = const Value.absent(),
                 Value<int?> previousAmountCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BillsCompanion(
@@ -6150,7 +6359,7 @@ class $$BillsTableTableManager
                 isEstimate: isEstimate,
                 isSubscription: isSubscription,
                 needsReview: needsReview,
-                paidOn: paidOn,
+                lastPaidOn: lastPaidOn,
                 previousAmountCents: previousAmountCents,
                 rowid: rowid,
               ),
@@ -6164,7 +6373,7 @@ class $$BillsTableTableManager
                 Value<bool> isEstimate = const Value.absent(),
                 Value<bool> isSubscription = const Value.absent(),
                 Value<bool> needsReview = const Value.absent(),
-                Value<LocalDate?> paidOn = const Value.absent(),
+                Value<LocalDate?> lastPaidOn = const Value.absent(),
                 Value<int?> previousAmountCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BillsCompanion.insert(
@@ -6176,7 +6385,7 @@ class $$BillsTableTableManager
                 isEstimate: isEstimate,
                 isSubscription: isSubscription,
                 needsReview: needsReview,
-                paidOn: paidOn,
+                lastPaidOn: lastPaidOn,
                 previousAmountCents: previousAmountCents,
                 rowid: rowid,
               ),
@@ -6504,12 +6713,14 @@ typedef $$VaultsTableCreateCompanionBuilder = VaultsCompanion Function({
   required int openingBalanceCents,
   required int steadyPayWeeklyCents,
   Value<int> targetWeeks,
+  Value<LocalDate?> lastReleaseDate,
 });
 typedef $$VaultsTableUpdateCompanionBuilder = VaultsCompanion Function({
   Value<int> id,
   Value<int> openingBalanceCents,
   Value<int> steadyPayWeeklyCents,
   Value<int> targetWeeks,
+  Value<LocalDate?> lastReleaseDate,
 });
 
 class $$VaultsTableFilterComposer
@@ -6539,6 +6750,12 @@ class $$VaultsTableFilterComposer
   ColumnFilters<int> get targetWeeks => $composableBuilder(
     column: $table.targetWeeks,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<LocalDate?, LocalDate, String>
+  get lastReleaseDate => $composableBuilder(
+    column: $table.lastReleaseDate,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 }
 
@@ -6570,6 +6787,11 @@ class $$VaultsTableOrderingComposer
     column: $table.targetWeeks,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get lastReleaseDate => $composableBuilder(
+    column: $table.lastReleaseDate,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$VaultsTableAnnotationComposer
@@ -6598,6 +6820,12 @@ class $$VaultsTableAnnotationComposer
     column: $table.targetWeeks,
     builder: (column) => column,
   );
+
+  GeneratedColumnWithTypeConverter<LocalDate?, String> get lastReleaseDate =>
+      $composableBuilder(
+        column: $table.lastReleaseDate,
+        builder: (column) => column,
+      );
 }
 
 class $$VaultsTableTableManager
@@ -6632,11 +6860,13 @@ class $$VaultsTableTableManager
                 Value<int> openingBalanceCents = const Value.absent(),
                 Value<int> steadyPayWeeklyCents = const Value.absent(),
                 Value<int> targetWeeks = const Value.absent(),
+                Value<LocalDate?> lastReleaseDate = const Value.absent(),
               }) => VaultsCompanion(
                 id: id,
                 openingBalanceCents: openingBalanceCents,
                 steadyPayWeeklyCents: steadyPayWeeklyCents,
                 targetWeeks: targetWeeks,
+                lastReleaseDate: lastReleaseDate,
               ),
           createCompanionCallback:
               ({
@@ -6644,11 +6874,13 @@ class $$VaultsTableTableManager
                 required int openingBalanceCents,
                 required int steadyPayWeeklyCents,
                 Value<int> targetWeeks = const Value.absent(),
+                Value<LocalDate?> lastReleaseDate = const Value.absent(),
               }) => VaultsCompanion.insert(
                 id: id,
                 openingBalanceCents: openingBalanceCents,
                 steadyPayWeeklyCents: steadyPayWeeklyCents,
                 targetWeeks: targetWeeks,
+                lastReleaseDate: lastReleaseDate,
               ),
           withReferenceMapper: (p0) => p0
               .map(

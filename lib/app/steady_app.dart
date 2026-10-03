@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -37,10 +39,24 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
   /// Lock again after this long in the background.
   static const _relockAfter = Duration(minutes: 1);
 
+  /// Fires just after local midnight: the daily number resets (Handoff 3).
+  Timer? _midnight;
+
+  void _scheduleMidnight() {
+    _midnight?.cancel();
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month, now.day + 1, 0, 0, 1);
+    _midnight = Timer(next.difference(now), () {
+      widget.store.onClockTick();
+      _scheduleMidnight();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scheduleMidnight();
     final s = widget.store.settings;
     if (widget.initialRoute == Routes.home &&
         s.appLockEnabled &&
@@ -52,6 +68,7 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _midnight?.cancel();
     super.dispose();
   }
 
@@ -70,6 +87,9 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
             : DateTime.now().difference(_backgroundedAt!);
         _backgroundedAt = null;
         if (lockOn && away >= _relockAfter && !_lockShowing) _showLock();
+        // The date may have changed while away; timers don't run then.
+        widget.store.onClockTick();
+        _scheduleMidnight();
         setState(() => _covered = false);
       case AppLifecycleState.detached:
         break;

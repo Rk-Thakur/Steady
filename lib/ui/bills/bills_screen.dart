@@ -150,13 +150,13 @@ class _BillsScreenState extends State<BillsScreen> {
                 child: ValueRow(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   label: upcoming[i].name,
-                  labelWidget: NameMeta(
-                    name: upcoming[i].name,
-                    meta:
-                        '${formatShortDate(upcoming[i].dueDate)}${upcoming[i].isEstimate ? ' · est.' : ''}',
+                  labelWidget: _BillLabel(
+                    bill: upcoming[i],
+                    today: today,
+                    payday: payday,
                   ),
                   value:
-                      '${upcoming[i].isEstimate ? '~' : ''}${m(upcoming[i].amountCents)}',
+                      '${upcoming[i].isEstimate ? '~' : ''}${m(upcoming[i].reservedBefore(payday))}',
                 ),
               ),
             ],
@@ -344,6 +344,56 @@ class _ReviewCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// "Car insurance · Oct 8", "Electric · Oct 11 · est.", "Gym · 2× before
+/// payday", and overdue bills in the alert color.
+class _BillLabel extends StatelessWidget {
+  const _BillLabel({
+    required this.bill,
+    required this.today,
+    required this.payday,
+  });
+  final Bill bill;
+  final LocalDate today;
+  final LocalDate payday;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final times = bill.occurrencesBefore(payday).length;
+    final overdue = bill.isOverdueOn(today);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: bill.name,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(
+            text: overdue
+                ? ' · overdue since ${formatShortDate(bill.dueDate)}'
+                : ' · ${formatShortDate(bill.dueDate)}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: overdue ? FontWeight.w700 : FontWeight.w500,
+              color: overdue ? c.dangerFg : c.muted,
+            ),
+          ),
+          TextSpan(
+            text:
+                '${times > 1 ? ' · $times× before payday' : ''}${bill.isEstimate ? ' · est.' : ''}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: c.muted,
+            ),
+          ),
+        ],
+      ),
+      style: SteadyType.body.copyWith(fontSize: 15),
     );
   }
 }

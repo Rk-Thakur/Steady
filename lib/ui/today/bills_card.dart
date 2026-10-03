@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/money.dart';
-import '../../domain/models/models.dart';
+import '../../data/budget_store.dart';
 import '../../theme/tokens.dart';
 import '../widgets/steady_card.dart';
 
@@ -17,7 +17,7 @@ class BillsCard extends StatelessWidget {
     this.onSeeAll,
   });
 
-  final List<Bill> bills;
+  final List<CycleBill> bills;
   final int reservedCents;
   final int needsReviewCount;
   final String symbol;
@@ -26,7 +26,7 @@ class BillsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final paid = bills.where((b) => b.isPaid).length;
+    final paid = bills.where((b) => b.paid).length;
     final toGo = bills.length - paid;
 
     return SteadyCard(
@@ -51,7 +51,7 @@ class BillsCard extends StatelessWidget {
                       Expanded(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: bills[i].isPaid ? c.billPaid : c.billPending,
+                            color: bills[i].paid ? c.billPaid : c.billPending,
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),

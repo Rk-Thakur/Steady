@@ -52,6 +52,7 @@ void main() {
     (Routes.categories, (_) => null),
     (Routes.categoryEdit, (s) => s.categories.first.id),
     (Routes.billEdit, (_) => null),
+    (Routes.billEdit, (_) => 'car'),
     (Routes.backup, (_) => null),
     (Routes.help, (_) => null),
     (Routes.notifications, (_) => null),

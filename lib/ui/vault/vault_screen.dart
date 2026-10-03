@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/date_format.dart';
 import '../../core/money.dart';
 import '../../data/store_scope.dart';
+import '../../domain/schedule.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
@@ -42,11 +43,9 @@ class _VaultScreenState extends State<VaultScreen> {
     final weeks = steady == 0 ? 0 : balance / steady;
     String whole(int cents) =>
         formatMoney(cents, symbol: symbol, showCents: false);
-    // Next Monday after today.
-    var release = store.today.addDays(1);
-    while (release.weekday != DateTime.monday) {
-      release = release.addDays(1);
-    }
+    // Releases happen every Monday after the last one.
+    final release = mondayAfter(vault.lastReleaseDate ?? store.today);
+    final active = vault.isActive;
 
     void adjust(int delta) => store.updateVault(
       vault.copyWith(
@@ -102,7 +101,9 @@ class _VaultScreenState extends State<VaultScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Next release to your daily number · ${formatShortDay(release)}',
+                active
+                    ? 'Next release to your daily number · ${formatShortDay(release)}'
+                    : 'Not set yet. Pick a weekly amount you can count on.',
                 style: SteadyType.caption.copyWith(
                   fontWeight: FontWeight.w500,
                   color: c.onInverseMuted,
@@ -200,7 +201,7 @@ class _VaultScreenState extends State<VaultScreen> {
             ],
           ),
         ),
-        if (_editing)
+        if (_editing || !active)
           Panel(
             borderColor: c.primary,
             borderWidth: 2,
@@ -256,9 +257,15 @@ class _VaultScreenState extends State<VaultScreen> {
           onPressed: () => Navigator.of(context).pushNamed(Routes.logIncome),
         ),
         SteadyButton(
-          _editing ? 'Done' : 'Adjust steady pay',
+          !active
+              ? 'Set steady pay'
+              : _editing
+              ? 'Done'
+              : 'Adjust steady pay',
           kind: ButtonKind.secondary,
-          onPressed: () => setState(() => _editing = !_editing),
+          onPressed: active
+              ? () => setState(() => _editing = !_editing)
+              : () => adjust(30000),
         ),
       ],
     );

@@ -449,11 +449,7 @@ class PaidPromptBody extends StatefulWidget {
   State<PaidPromptBody> createState() => _PaidPromptBodyState();
 }
 
-enum _Answer { later, none }
-
 class _PaidPromptBodyState extends State<PaidPromptBody> {
-  _Answer? _answer;
-
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
@@ -462,12 +458,17 @@ class _PaidPromptBodyState extends State<PaidPromptBody> {
       store.dailyNumber.safeToSpendCents,
       symbol: store.symbol,
     );
-    final expected = formatMoney(
-      store.vault.steadyPayWeeklyCents,
-      symbol: store.symbol,
-      showCents: false,
-    );
 
+    final today = store.today;
+    final payLine = today == store.nextPayday
+        ? 'Payday is today.'
+        : 'Payday was ${formatShortDay(store.nextPayday)}.';
+    final lastPay = store.history
+        .where((e) => e.isIncome && !e.toVault && !e.fromVault)
+        .firstOrNull;
+    final usual = lastPay == null
+        ? ''
+        : ' You usually get about ${formatMoney(lastPay.amountCents, symbol: store.symbol, showCents: false)}.';
     return TabBody(
       gap: SteadySpace.sectionGap,
       children: [
@@ -495,11 +496,11 @@ class _PaidPromptBodyState extends State<PaidPromptBody> {
               ),
               const SizedBox(height: SteadySpace.s3),
               Text(
-                'Payday was ${formatShortDay(store.nextPayday)}. You usually get about $expected.',
+                '$payLine$usual',
                 style: SteadyType.body.copyWith(fontSize: 14, color: c.muted),
               ),
               const SizedBox(height: SteadySpace.s3),
-              if (_answer == null) ...[
+              ...[
                 SteadyButton(
                   'Yes, log it',
                   onPressed: () =>
@@ -512,34 +513,26 @@ class _PaidPromptBodyState extends State<PaidPromptBody> {
                       'Not yet',
                       kind: ButtonKind.secondary,
                       height: 48,
-                      onPressed: () => setState(() => _answer = _Answer.later),
+                      onPressed: () {
+                        store.snoozePayPrompt();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Okay. We'll ask again tomorrow. Your number stays the same.",
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     SteadyButton(
                       "It won't come",
                       kind: ButtonKind.secondary,
                       height: 48,
-                      onPressed: () => setState(() => _answer = _Answer.none),
+                      onPressed: store.payWontCome,
                     ),
                   ],
                 ),
-              ] else if (_answer == _Answer.later)
-                const SoftBanner(
-                  radius: SteadyRadius.md,
-                  child: Text(
-                    "Okay. We'll ask again tomorrow morning. Your number stays the same.",
-                  ),
-                )
-              else
-                SoftBanner(
-                  radius: SteadyRadius.md,
-                  tone: BannerTone.warning,
-                  child: LeadText(
-                    lead: 'Recalculated without it.',
-                    body:
-                        'The Vault covers the gap, so your daily number stays at $safe.',
-                    leadColor: c.warningFg,
-                  ),
-                ),
+              ],
             ],
           ),
         ),

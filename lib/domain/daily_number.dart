@@ -17,6 +17,7 @@ class DailyNumberInput {
     required this.goalSetAsidesCents,
     this.incomeTodayCents = 0,
     this.spentTodayCents = 0,
+    this.billPaymentsTodayCents = 0,
   });
 
   final LocalDate today;
@@ -30,6 +31,10 @@ class DailyNumberInput {
   /// Income logged today that went straight to today (not to the Vault).
   final int incomeTodayCents;
   final int spentTodayCents;
+
+  /// Bills paid today. They were already reserved, so they leave the pool
+  /// together with their reservation instead of counting as spent today.
+  final int billPaymentsTodayCents;
 }
 
 @immutable
@@ -84,6 +89,7 @@ abstract final class DailyNumberCalculator {
     final pool =
         input.moneyAtStartOfDayCents +
         input.incomeTodayCents -
+        input.billPaymentsTodayCents -
         input.unpaidBillsBeforePaydayCents -
         input.goalSetAsidesCents;
     return DailyNumber(
@@ -107,13 +113,16 @@ abstract final class DailyNumberCalculator {
     var moneyAtStartOfDay = plan.openingBalanceCents;
     var incomeToday = 0;
     var spentToday = 0;
+    var billPaymentsToday = 0;
 
     for (final e in entries) {
       if (e.localDate.isBefore(plan.startDate) || e.localDate.isAfter(today)) {
         continue;
       }
       if (e.localDate == today) {
-        if (e.isSpend) {
+        if (e.isBillPayment) {
+          billPaymentsToday += e.amountCents;
+        } else if (e.isSpend) {
           spentToday += e.amountCents;
         } else if (!e.toVault) {
           incomeToday += e.amountCents;
@@ -123,9 +132,11 @@ abstract final class DailyNumberCalculator {
       }
     }
 
-    final reservedBills = bills
-        .where((b) => b.isReservedBefore(nextPayday))
-        .fold<int>(0, (sum, b) => sum + b.amountCents);
+    // Every unpaid occurrence before payday (a weekly bill can be due twice).
+    final reservedBills = bills.fold<int>(
+      0,
+      (sum, b) => sum + b.reservedBefore(nextPayday),
+    );
 
     return DailyNumberInput(
       today: today,
@@ -135,6 +146,7 @@ abstract final class DailyNumberCalculator {
       goalSetAsidesCents: plan.goalSetAsideCents,
       incomeTodayCents: incomeToday,
       spentTodayCents: spentToday,
+      billPaymentsTodayCents: billPaymentsToday,
     );
   }
 
@@ -147,7 +159,10 @@ abstract final class DailyNumberCalculator {
         today: i.today.addDays(1),
         nextPayday: i.nextPayday,
         moneyAtStartOfDayCents:
-            i.moneyAtStartOfDayCents + i.incomeTodayCents - i.spentTodayCents,
+            i.moneyAtStartOfDayCents +
+            i.incomeTodayCents -
+            i.spentTodayCents -
+            i.billPaymentsTodayCents,
         unpaidBillsBeforePaydayCents: i.unpaidBillsBeforePaydayCents,
         goalSetAsidesCents: i.goalSetAsidesCents,
       ),

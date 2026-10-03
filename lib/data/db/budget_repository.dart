@@ -93,6 +93,7 @@ class BudgetRepository {
               openingBalanceCents: vault.openingBalanceCents,
               steadyPayWeeklyCents: vault.steadyPayWeeklyCents,
               targetWeeks: vault.targetWeeks,
+              lastReleaseDate: vault.lastReleaseDate,
             ),
       split: split == null
           ? null
@@ -159,6 +160,7 @@ class BudgetRepository {
           openingBalanceCents: v.openingBalanceCents,
           steadyPayWeeklyCents: v.steadyPayWeeklyCents,
           targetWeeks: Value(v.targetWeeks),
+          lastReleaseDate: Value(v.lastReleaseDate),
         ),
       );
 
@@ -201,6 +203,8 @@ class BudgetRepository {
           note: Value(e.note),
           splitId: Value(e.splitId),
           toVault: Value(e.toVault),
+          fromVault: Value(e.fromVault),
+          billId: Value(e.billId),
         ),
       );
 
@@ -240,7 +244,7 @@ class BudgetRepository {
           isEstimate: Value(b.isEstimate),
           isSubscription: Value(b.isSubscription),
           needsReview: Value(b.needsReview),
-          paidOn: Value(b.paidOn),
+          lastPaidOn: Value(b.lastPaidOn),
           previousAmountCents: Value(b.previousAmountCents),
         ),
       );
@@ -372,6 +376,8 @@ class BudgetRepository {
     note: r.note,
     splitId: r.splitId,
     toVault: r.toVault,
+    fromVault: r.fromVault,
+    billId: r.billId,
   );
 
   static Bill _billFrom(BillRow r) => Bill(
@@ -383,7 +389,7 @@ class BudgetRepository {
     isEstimate: r.isEstimate,
     isSubscription: r.isSubscription,
     needsReview: r.needsReview,
-    paidOn: r.paidOn,
+    lastPaidOn: r.lastPaidOn,
     previousAmountCents: r.previousAmountCents,
   );
 

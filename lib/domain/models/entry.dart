@@ -37,6 +37,8 @@ class Entry {
     this.note,
     this.splitId,
     this.toVault = false,
+    this.fromVault = false,
+    this.billId,
   }) : assert(
          amountCents > 0,
          'amountCents is always positive; type gives direction',
@@ -64,6 +66,16 @@ class Entry {
   /// Income only: deposited into the Paycheck Vault instead of today's number.
   final bool toVault;
 
+  /// Income only: a weekly steady-pay release out of the Paycheck Vault into
+  /// the daily number (created by the app, not typed by the user).
+  final bool fromVault;
+
+  /// Spend only: this entry paid an occurrence of that bill. It moves money
+  /// out of the reservation, not out of today's allowance.
+  final String? billId;
+
+  bool get isBillPayment => isSpend && billId != null;
+
   static const maxMerchantLength = 40;
 
   bool get isSpend => type == EntryType.spend;
@@ -87,6 +99,8 @@ class Entry {
     String? note,
     String? splitId,
     bool? toVault,
+    bool? fromVault,
+    String? billId,
   }) {
     return Entry(
       id: id,
@@ -102,6 +116,8 @@ class Entry {
       note: note ?? this.note,
       splitId: splitId ?? this.splitId,
       toVault: toVault ?? this.toVault,
+      fromVault: fromVault ?? this.fromVault,
+      billId: billId ?? this.billId,
     );
   }
 }

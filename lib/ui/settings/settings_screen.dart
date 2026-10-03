@@ -21,7 +21,7 @@ class SettingsScreen extends StatelessWidget {
     final hasName = name != null && name.isNotEmpty;
     void go(String route) => Navigator.of(context).pushNamed(route);
     final activeGoals = store.goals.where((g) => !g.isReached).length;
-    final billCount = store.bills.where((b) => !b.isPaid).length;
+    final billCount = store.bills.length;
 
     return SteadyPage(
       title: 'Settings',
