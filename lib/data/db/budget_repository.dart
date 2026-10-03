@@ -190,7 +190,11 @@ class BudgetRepository {
           localDate: e.localDate,
           createdAtUtc: e.createdAtUtc,
           timeZoneId: e.timeZoneId,
-          merchant: Value(e.merchant),
+          merchant: Value(
+            e.merchant == null || e.merchant!.length <= Entry.maxMerchantLength
+                ? e.merchant
+                : e.merchant!.substring(0, Entry.maxMerchantLength),
+          ),
           categoryId: Value(e.categoryId),
           mood: Value(e.mood),
           planned: Value(e.planned),

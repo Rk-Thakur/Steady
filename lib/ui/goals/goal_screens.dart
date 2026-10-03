@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/date_format.dart';
 import '../../core/money.dart';
@@ -618,154 +619,162 @@ class _GoalDoneScreenState extends State<GoalDoneScreen>
       (110.0, 60.0, 6.0, 6.0, 0.0, 0),
     ];
 
-    return Scaffold(
-      backgroundColor: c.hero,
-      body: Stack(
-        children: [
-          for (final (x, y, w, h, rot, color) in confetti)
-            AnimatedBuilder(
-              animation: _anim,
-              builder: (context, child) {
-                final t = reduce ? 1.0 : Curves.easeIn.transform(_anim.value);
-                return Positioned(
-                  left: x / 390 * MediaQuery.sizeOf(context).width,
-                  top: pad.top + y * t - 40 * (1 - t),
-                  child: Opacity(opacity: .85 * t, child: child),
-                );
-              },
-              child: Transform.rotate(
-                angle: rot * math.pi / 180,
-                child: Container(
-                  width: w,
-                  height: h,
-                  decoration: BoxDecoration(
-                    color: [c.highlight, Colors.white, c.billPending][color],
-                    borderRadius: BorderRadius.circular(w == h ? 99 : 2),
-                  ),
-                ),
-              ),
-            ),
-          FillOrScroll(
-            padding: EdgeInsets.fromLTRB(
-              SteadySpace.s6,
-              pad.top + 96,
-              SteadySpace.s6,
-              pad.bottom + SteadySpace.s6,
-            ),
-            children: [
-              ScaleTransition(
-                scale: reduce
-                    ? const AlwaysStoppedAnimation(1.0)
-                    : Tween(begin: .6, end: 1.0).animate(
-                        CurvedAnimation(
-                          parent: _anim,
-                          curve: const Interval(
-                            0,
-                            .42,
-                            curve: Curves.elasticOut,
-                          ),
-                        ),
-                      ),
-                child: Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    color: c.highlight,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.check_rounded,
-                    size: 52,
-                    color: c.onHighlight,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'GOAL REACHED',
-                style: SteadyType.overline.copyWith(
-                  fontSize: 14,
-                  letterSpacing: 1.5,
-                  color: c.highlight,
-                ),
-              ),
-              const SizedBox(height: SteadySpace.s2),
-              Text(
-                'You saved $saved for your $name',
-                textAlign: TextAlign.center,
-                style: SteadyType.title.copyWith(
-                  fontSize: 38,
-                  height: 1.05,
-                  letterSpacing: -1,
-                  color: c.onHero,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: StatTile(label: 'Saved', value: saved, onDark: true),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: StatTile(
-                      label: 'Was setting aside',
-                      value: '$perDay/day',
-                      onDark: true,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: c.hero,
+        body: Stack(
+          children: [
+            for (final (x, y, w, h, rot, color) in confetti)
+              AnimatedBuilder(
+                animation: _anim,
+                builder: (context, child) {
+                  final t = reduce ? 1.0 : Curves.easeIn.transform(_anim.value);
+                  return Positioned(
+                    left: x / 390 * MediaQuery.sizeOf(context).width,
+                    top: pad.top + y * t - 40 * (1 - t),
+                    child: Opacity(opacity: .85 * t, child: child),
+                  );
+                },
+                child: Transform.rotate(
+                  angle: rot * math.pi / 180,
+                  child: Container(
+                    width: w,
+                    height: h,
+                    decoration: BoxDecoration(
+                      color: [c.highlight, Colors.white, c.billPending][color],
+                      borderRadius: BorderRadius.circular(w == h ? 99 : 2),
                     ),
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 18),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: SteadySpace.s4,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: c.inverse,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      const TextSpan(text: 'Your daily number goes up '),
-                      TextSpan(
-                        text: perDay,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: c.highlight,
+            FillOrScroll(
+              padding: EdgeInsets.fromLTRB(
+                SteadySpace.s6,
+                pad.top + 96,
+                SteadySpace.s6,
+                pad.bottom + SteadySpace.s6,
+              ),
+              children: [
+                ScaleTransition(
+                  scale: reduce
+                      ? const AlwaysStoppedAnimation(1.0)
+                      : Tween(begin: .6, end: 1.0).animate(
+                          CurvedAnimation(
+                            parent: _anim,
+                            curve: const Interval(
+                              0,
+                              .42,
+                              curve: Curves.elasticOut,
+                            ),
+                          ),
                         ),
-                      ),
-                      const TextSpan(text: ' starting tomorrow.'),
-                    ],
+                  child: Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      color: c.highlight,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.check_rounded,
+                      size: 52,
+                      color: c.onHighlight,
+                    ),
                   ),
-                  style: SteadyType.body.copyWith(
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'GOAL REACHED',
+                  style: SteadyType.overline.copyWith(
                     fontSize: 14,
-                    color: c.onInverse,
+                    letterSpacing: 1.5,
+                    color: c.highlight,
                   ),
                 ),
-              ),
-              const Spacer(),
-              SteadyButton(
-                'Start the next goal',
-                kind: ButtonKind.highlight,
-                onPressed: () =>
-                    Navigator.of(context).pushReplacementNamed(Routes.goalNew),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                style: TextButton.styleFrom(
-                  foregroundColor: c.highlight,
-                  minimumSize: const Size.fromHeight(48),
+                const SizedBox(height: SteadySpace.s2),
+                Text(
+                  'You saved $saved for your $name',
+                  textAlign: TextAlign.center,
+                  style: SteadyType.title.copyWith(
+                    fontSize: 38,
+                    height: 1.05,
+                    letterSpacing: -1,
+                    color: c.onHero,
+                  ),
                 ),
-                child: const Text('Back to goals'),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatTile(
+                        label: 'Saved',
+                        value: saved,
+                        onDark: true,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: StatTile(
+                        label: 'Was setting aside',
+                        value: '$perDay/day',
+                        onDark: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: SteadySpace.s4,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.inverse,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        const TextSpan(text: 'Your daily number goes up '),
+                        TextSpan(
+                          text: perDay,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: c.highlight,
+                          ),
+                        ),
+                        const TextSpan(text: ' starting tomorrow.'),
+                      ],
+                    ),
+                    style: SteadyType.body.copyWith(
+                      fontSize: 14,
+                      color: c.onInverse,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                SteadyButton(
+                  'Start the next goal',
+                  kind: ButtonKind.highlight,
+                  onPressed: () =>
+                      Navigator.of(context)
+                          .pushReplacementNamed(Routes.goalNew),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: c.highlight,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: const Text('Back to goals'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

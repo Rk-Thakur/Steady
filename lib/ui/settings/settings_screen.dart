@@ -183,6 +183,22 @@ class SettingsScreen extends StatelessWidget {
             ),
             if (kDebugMode)
               NavRow(
+                icon: Icons.science_outlined,
+                tone: BannerTone.neutral,
+                label: 'Load sample data',
+                value: 'Debug',
+                onTap: () async {
+                  final ok = await confirmSheet(
+                    context,
+                    title: 'Replace everything with sample data?',
+                    body: 'Your entries, bills, goals and settings on this phone are replaced by the design\'s demo data.',
+                    confirmLabel: 'Load sample data',
+                  );
+                  if (ok) store.loadSample();
+                },
+              ),
+            if (kDebugMode)
+              NavRow(
                 icon: Icons.grid_view_rounded,
                 tone: BannerTone.neutral,
                 label: 'All screens',

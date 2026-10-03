@@ -13,7 +13,15 @@ abstract interface class KeyVault {
 /// The database key in the platform's secure storage (Handoff 4: "Key stored
 /// in iOS Keychain / Android Keystore").
 class SecureKeyVault implements KeyVault {
+  /// The database key.
   SecureKeyVault([FlutterSecureStorage? storage])
+    : this._(_databaseKey, storage);
+
+  /// The App lock PIN (kept out of the database, Handoff 4).
+  SecureKeyVault.pin([FlutterSecureStorage? storage])
+    : this._(_pinKey, storage);
+
+  SecureKeyVault._(this._name, FlutterSecureStorage? storage)
     : _storage =
           storage ??
           const FlutterSecureStorage(
@@ -30,7 +38,9 @@ class SecureKeyVault implements KeyVault {
             ),
           );
 
-  static const _name = 'steady.database_key.v1';
+  static const _databaseKey = 'steady.database_key.v1';
+  static const _pinKey = 'steady.app_lock_pin.v1';
+  final String _name;
   final FlutterSecureStorage _storage;
 
   @override

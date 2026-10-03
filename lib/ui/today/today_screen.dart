@@ -61,6 +61,16 @@ class TodayScreen extends StatelessWidget {
       gap: SteadySpace.sectionGap,
       children: [
         const TodayHeader(),
+        if (store.saveError != null)
+          SoftBanner(
+            tone: BannerTone.danger,
+            icon: Icons.sync_problem_rounded,
+            child: LeadText(
+              lead: "Your last change wasn't saved.",
+              body: "It's still on screen. Try again in a moment; if it keeps happening, restart Steady.",
+              leadColor: c.dangerFg,
+            ),
+          ),
         HeroCard(
           number: number,
           payday: store.nextPayday,

@@ -4,9 +4,15 @@ import '../core/local_date.dart';
 import '../domain/daily_number.dart';
 import '../domain/models/models.dart';
 import 'db/budget_repository.dart';
+import 'db/database_key.dart';
 
-/// In-memory app state. Swap the backing lists for the encrypted local
-/// database later; screens only depend on the getters and methods below.
+/// App state for every screen.
+///
+/// The store is the single source of truth the UI reads synchronously. When a
+/// [BudgetRepository] is attached, every change is also written to the
+/// encrypted database: the UI updates immediately, and writes run one after
+/// another in the background (so they land in the order they happened).
+/// Without a repository (tests, previews) the store is in-memory only.
 class BudgetStore extends ChangeNotifier {
   BudgetStore({
     required this._settings,
@@ -18,13 +24,98 @@ class BudgetStore extends ChangeNotifier {
     required this._vault,
     this._split,
     List<SharedExpense> sharedExpenses = const [],
+    Map<LocalDate, OverspendStrategy> overspendDecisions = const {},
     LocalDate Function()? clock,
+    BudgetRepository? repository,
+    this._pinVault,
   }) : _categories = List.of(categories),
        _entries = List.of(entries),
        _bills = List.of(bills),
        _goals = List.of(goals),
        _shared = List.of(sharedExpenses),
-       _clock = clock ?? LocalDate.today;
+       _overspendHandled = Map.of(overspendDecisions),
+       _clock = clock ?? LocalDate.today,
+       _repo = repository;
+
+  /// Builds the store from what the database holds. A fresh install gets
+  /// [defaultSnapshot] (and it is saved straight away).
+  factory BudgetStore.fromSnapshot(
+    BudgetSnapshot snapshot, {
+    LocalDate Function()? clock,
+    BudgetRepository? repository,
+    KeyVault? pinVault,
+    String? pin,
+  }) {
+    final today = (clock ?? LocalDate.today)();
+    final s = snapshot.isFresh ? defaultSnapshot(today) : snapshot;
+    var settings = s.settings!;
+    // The PIN lives in secure storage, not the database. App lock without a
+    // PIN can't work, so treat it as off.
+    settings = settings.copyWith(
+      pin: () => pin,
+      appLockEnabled: settings.appLockEnabled && pin != null,
+    );
+    final store = BudgetStore(
+      settings: settings,
+      plan: s.plan!,
+      categories: s.categories,
+      entries: s.entries,
+      bills: s.bills,
+      goals: s.goals,
+      vault: s.vault!,
+      split: s.split,
+      sharedExpenses: s.sharedExpenses,
+      overspendDecisions: s.overspendDecisions,
+      clock: clock,
+      repository: repository,
+      pinVault: pinVault,
+    );
+    if (snapshot.isFresh) store._save((r) => r.replaceAll(store.toSnapshot()));
+    return store;
+  }
+
+  /// What a brand-new install starts with: nothing logged, default
+  /// categories, onboarding not done.
+  static BudgetSnapshot defaultSnapshot(LocalDate today) => BudgetSnapshot(
+    settings: AppSettings(
+      currency: Currency.usd,
+      payFrequency: PayFrequency.monthly,
+      nextPayday: today.addDays(14),
+      onboarded: false,
+    ),
+    plan: CyclePlan(
+      startDate: today,
+      openingBalanceCents: 0,
+      goalSetAsideCents: 0,
+    ),
+    categories: const [
+      BudgetCategory(id: 'food', name: 'Food', tone: CategoryTone.warning),
+      BudgetCategory(
+        id: 'transport',
+        name: 'Transport',
+        tone: CategoryTone.info,
+      ),
+      BudgetCategory(
+        id: 'shopping',
+        name: 'Shopping',
+        tone: CategoryTone.danger,
+      ),
+      BudgetCategory(id: 'fun', name: 'Fun', tone: CategoryTone.primary),
+      BudgetCategory(id: 'health', name: 'Health', tone: CategoryTone.neutral),
+      BudgetCategory(
+        id: 'bills',
+        name: 'Bills & subs',
+        tone: CategoryTone.info,
+      ),
+    ],
+    entries: const [],
+    bills: const [],
+    goals: const [],
+    vault: const Vault(openingBalanceCents: 0, steadyPayWeeklyCents: 0),
+    split: null,
+    sharedExpenses: const [],
+    overspendDecisions: const {},
+  );
 
   AppSettings _settings;
   CyclePlan _plan;
@@ -35,8 +126,48 @@ class BudgetStore extends ChangeNotifier {
   Vault _vault;
   ExpenseSplit? _split;
   final List<SharedExpense> _shared;
+
+  /// How each day's overspend was handled (S4), by local date.
+  final Map<LocalDate, OverspendStrategy> _overspendHandled;
   final LocalDate Function() _clock;
+  final BudgetRepository? _repo;
+  final KeyVault? _pinVault;
   var _nextId = 0;
+
+  // ─── Persistence ─────────────────────────────────────────────────────────
+
+  Future<void> _pending = Future.value();
+
+  /// The last save that failed, if any (shown as a banner).
+  Object? get saveError => _saveError;
+  Object? _saveError;
+
+  /// Queues [op] after earlier writes. Failures are kept in [saveError]
+  /// rather than lost; the in-memory state stays as the user sees it.
+  void _save(Future<void> Function(BudgetRepository repo) op) {
+    final repo = _repo;
+    if (repo == null) return;
+    _pending = _pending
+        .then((_) => op(repo))
+        .then(
+          (_) {
+            if (_saveError != null) {
+              _saveError = null;
+              notifyListeners();
+            }
+          },
+          onError: (Object e, StackTrace st) {
+            _saveError = e;
+            debugPrint('Steady: save failed: $e\n$st');
+            notifyListeners();
+          },
+        );
+  }
+
+  /// Completes when every queued write has finished.
+  Future<void> flush() => _pending;
+
+  int _orderOf<T>(List<T> list, T item) => list.indexOf(item);
 
   // ─── Reads ───────────────────────────────────────────────────────────────
 
@@ -167,9 +298,6 @@ class BudgetStore extends ChangeNotifier {
     return _shared.fold(0, (sum, e) => sum + e.balanceEffectCents(s));
   }
 
-  /// How each day's overspend was handled (S4), by local date.
-  final Map<LocalDate, OverspendStrategy> _overspendHandled = {};
-
   OverspendStrategy? overspendHandledOn(LocalDate day) =>
       _overspendHandled[day];
 
@@ -195,33 +323,47 @@ class BudgetStore extends ChangeNotifier {
   void addEntry(Entry entry) {
     _entries.add(entry);
     notifyListeners();
+    _save((r) => r.upsertEntry(entry));
   }
 
   void updateEntry(Entry entry) {
     final i = _entries.indexWhere((e) => e.id == entry.id);
-    if (i >= 0) _entries[i] = entry;
+    if (i < 0) return;
+    _entries[i] = entry;
     notifyListeners();
+    _save((r) => r.upsertEntry(entry));
   }
 
   void removeEntry(String id) {
     _entries.removeWhere((e) => e.id == id);
     notifyListeners();
+    _save((r) => r.deleteEntry(id));
   }
 
   void updateSettings(AppSettings settings) {
+    final pinChanged = settings.pin != _settings.pin;
     _settings = settings;
     notifyListeners();
+    _save((r) => r.saveSettings(settings));
+    final vault = _pinVault;
+    if (pinChanged && vault != null) {
+      final pin = settings.pin;
+      _save((_) => pin == null ? vault.delete() : vault.write(pin));
+    }
   }
 
   void addBill(Bill bill) {
     _bills.add(bill);
     notifyListeners();
+    _save((r) => r.upsertBill(bill));
   }
 
   void updateBill(Bill bill) {
     final i = _bills.indexWhere((b) => b.id == bill.id);
-    if (i >= 0) _bills[i] = bill;
+    if (i < 0) return;
+    _bills[i] = bill;
     notifyListeners();
+    _save((r) => r.upsertBill(bill));
   }
 
   void upsertCategory(BudgetCategory category) {
@@ -232,27 +374,35 @@ class BudgetStore extends ChangeNotifier {
       _categories.add(category);
     }
     notifyListeners();
+    final order = _orderOf(_categories, category);
+    _save((r) => r.upsertCategory(category, sortOrder: order));
   }
 
   void removeCategory(String id) {
     _categories.removeWhere((c) => c.id == id);
     notifyListeners();
+    _save((r) => r.deleteCategory(id));
   }
 
   void addGoal(Goal goal) {
     _goals.add(goal);
     notifyListeners();
+    final order = _orderOf(_goals, goal);
+    _save((r) => r.upsertGoal(goal, sortOrder: order));
   }
 
   void updateGoal(Goal goal) {
     final i = _goals.indexWhere((g) => g.id == goal.id);
-    if (i >= 0) _goals[i] = goal;
+    if (i < 0) return;
+    _goals[i] = goal;
     notifyListeners();
+    _save((r) => r.upsertGoal(goal, sortOrder: i));
   }
 
   void updateVault(Vault vault) {
     _vault = vault;
     notifyListeners();
+    _save((r) => r.saveVault(vault));
   }
 
   /// S4: the user chose how to absorb today's overspend.
@@ -266,7 +416,9 @@ class BudgetStore extends ChangeNotifier {
     String? categoryId,
     int overCents = 0,
   }) {
-    _overspendHandled[today] = strategy;
+    final day = today;
+    _overspendHandled[day] = strategy;
+    _save((r) => r.saveOverspendDecision(day, strategy));
     if (strategy == OverspendStrategy.takeFromCategory && categoryId != null) {
       final cat = categoryById(categoryId);
       final limit = cat?.monthlyLimitCents;
@@ -284,11 +436,13 @@ class BudgetStore extends ChangeNotifier {
   void addSharedExpense(SharedExpense expense) {
     _shared.add(expense);
     notifyListeners();
+    _save((r) => r.addSharedExpense(expense));
   }
 
   void setSplit(ExpenseSplit split) {
     _split = split;
     notifyListeners();
+    _save((r) => r.saveSplit(split));
   }
 
   /// Records a settle-up: clears shared expenses, balance back to zero.
@@ -296,14 +450,16 @@ class BudgetStore extends ChangeNotifier {
     final s = _split;
     if (s == null) return;
     _shared.clear();
-    _split = ExpenseSplit(
+    final settled = ExpenseSplit(
       id: s.id,
       personName: s.personName,
       yourSharePercent: s.yourSharePercent,
       method: s.method,
       lastSettled: today,
     );
+    _split = settled;
     notifyListeners();
+    _save((r) => r.settleUp(settled));
   }
 
   /// Onboarding "Set up your money": starts a pay cycle today from the money
@@ -312,30 +468,59 @@ class BudgetStore extends ChangeNotifier {
     final todaysDelta = _entries
         .where((e) => e.localDate == today)
         .fold<int>(0, (s, e) => s + e.spendableDeltaCents);
-    _plan = CyclePlan(
+    final plan = CyclePlan(
       startDate: today,
       // Money "now" already includes today's entries, so add them back.
       openingBalanceCents: balanceCents - todaysDelta,
       goalSetAsideCents: _plan.goalSetAsideCents,
     );
+    _plan = plan;
     _settings = _settings.copyWith(nextPayday: payday);
+    final settings = _settings;
     notifyListeners();
+    _save((r) => r.savePlan(plan));
+    _save((r) => r.saveSettings(settings));
   }
 
-  /// "Delete all my data": wipes everything and returns to onboarding.
+  /// "Delete all my data": wipes everything (including the PIN) and returns
+  /// to onboarding with a fresh default setup.
   void deleteAll() {
-    _entries.clear();
-    _bills.clear();
-    _goals.clear();
-    _shared.clear();
-    _split = null;
-    _vault = _vault.copyWith(openingBalanceCents: 0);
-    _plan = CyclePlan(
-      startDate: today,
-      openingBalanceCents: 0,
-      goalSetAsideCents: 0,
-    );
-    _settings = _settings.copyWith(onboarded: false, displayName: () => null);
+    _replaceWith(defaultSnapshot(today));
+    _save((r) => r.replaceAll(toSnapshot()));
+    final vault = _pinVault;
+    if (vault != null) _save((_) => vault.delete());
+  }
+
+  /// Debug: swap everything for the design's demo data.
+  void loadSample() {
+    final sample = BudgetStore.sample(clock: _clock).toSnapshot();
+    _replaceWith(sample);
+    _save((r) => r.replaceAll(sample));
+  }
+
+  void _replaceWith(BudgetSnapshot s) {
+    _settings = s.settings!.copyWith(appLockEnabled: false, pin: () => null);
+    _plan = s.plan!;
+    _categories
+      ..clear()
+      ..addAll(s.categories);
+    _entries
+      ..clear()
+      ..addAll(s.entries);
+    _bills
+      ..clear()
+      ..addAll(s.bills);
+    _goals
+      ..clear()
+      ..addAll(s.goals);
+    _vault = s.vault!;
+    _split = s.split;
+    _shared
+      ..clear()
+      ..addAll(s.sharedExpenses);
+    _overspendHandled
+      ..clear()
+      ..addAll(s.overspendDecisions);
     notifyListeners();
   }
 

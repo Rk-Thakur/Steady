@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
@@ -68,6 +70,12 @@ class _WavePainter extends CustomPainter {
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, this.autoAdvance = true});
+
+  /// The loading view shown while the database opens at launch: same look,
+  /// no navigation of its own.
+  const SplashScreen.loading({super.key}) : autoAdvance = false;
+
+  /// Advances on a timer or tap. False for [SplashScreen.loading].
   final bool autoAdvance;
 
   @override
@@ -91,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _continue() {
-    if (!mounted) return;
+    if (!mounted || !widget.autoAdvance) return;
     _timer?.cancel();
     final settings = StoreScope.of(context).settings;
     final nav = Navigator.of(context);
@@ -112,86 +120,91 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     final c = context.colors;
     final reduce = MediaQuery.disableAnimationsOf(context);
-    return Scaffold(
-      backgroundColor: c.hero,
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _continue,
-        child: Stack(
-          children: [
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SteadyLogo(size: 104),
-                  const SizedBox(height: 22),
-                  Text(
-                    'Steady',
-                    style: SteadyType.amountXl.copyWith(
-                      fontSize: 52,
-                      color: c.onHero,
-                    ),
-                  ),
-                  const SizedBox(height: SteadySpace.s2),
-                  Text(
-                    'Spend forward, not backward.',
-                    style: SteadyType.body.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: c.highlight,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: MediaQuery.paddingOf(context).bottom + 48,
-              child: Semantics(
-                label: 'Loading',
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: c.hero,
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _continue,
+          child: Stack(
+            children: [
+              Center(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    AnimatedBuilder(
-                      animation: _dots,
-                      builder: (context, _) => Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          for (var i = 0; i < 3; i++) ...[
-                            if (i > 0) const SizedBox(width: SteadySpace.s2),
-                            Transform.translate(
-                              // Rise 4 px, staggered 150 ms (Handoff 2 · Motion).
-                              offset: Offset(
-                                0,
-                                reduce ? 0 : -4 * _bump(_dots.value - i * .125),
-                              ),
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: c.highlight,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                    const SteadyLogo(size: 104),
+                    const SizedBox(height: 22),
+                    Text(
+                      'Steady',
+                      style: SteadyType.amountXl.copyWith(
+                        fontSize: 52,
+                        color: c.onHero,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: SteadySpace.s2),
                     Text(
-                      'SMART BUDGET TRACKER',
-                      style: SteadyType.overline.copyWith(
+                      'Spend forward, not backward.',
+                      style: SteadyType.body.copyWith(
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 1.5,
-                        color: c.onHeroMuted,
+                        color: c.highlight,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: MediaQuery.paddingOf(context).bottom + 48,
+                child: Semantics(
+                  label: 'Loading',
+                  child: Column(
+                    children: [
+                      AnimatedBuilder(
+                        animation: _dots,
+                        builder: (context, _) => Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            for (var i = 0; i < 3; i++) ...[
+                              if (i > 0) const SizedBox(width: SteadySpace.s2),
+                              Transform.translate(
+                                // Rise 4 px, staggered 150 ms (Handoff 2 · Motion).
+                                offset: Offset(
+                                  0,
+                                  reduce
+                                      ? 0
+                                      : -4 * _bump(_dots.value - i * .125),
+                                ),
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: c.highlight,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'SMART BUDGET TRACKER',
+                        style: SteadyType.overline.copyWith(
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.5,
+                          color: c.onHeroMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -251,71 +264,85 @@ class WelcomeScreen extends StatelessWidget {
       ],
     );
 
-    return Scaffold(
-      backgroundColor: c.hero,
-      body: FillOrScroll(
-        padding: EdgeInsets.fromLTRB(
-          SteadySpace.s6,
-          pad.top + 40,
-          SteadySpace.s6,
-          pad.bottom + SteadySpace.s6,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: c.hero,
+        body: FillOrScroll(
+          padding: EdgeInsets.fromLTRB(
+            SteadySpace.s6,
+            pad.top + 40,
+            SteadySpace.s6,
+            pad.bottom + SteadySpace.s6,
+          ),
+          children: [
+            const Align(alignment: Alignment.centerLeft, child: SteadyLogo()),
+            const SizedBox(height: 28),
+            Text(
+              'Know what you can spend today.',
+              style: SteadyType.title.copyWith(
+                fontSize: 42,
+                height: 1.05,
+                letterSpacing: -1,
+                color: c.onHero,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Steady sets aside your bills and goals first, then gives you one daily number you can trust.',
+              style: SteadyType.body.copyWith(
+                fontSize: 16,
+                height: 1.5,
+                color: c.onHeroMuted,
+              ),
+            ),
+            const SizedBox(height: 28),
+            feature(
+              Icons.today_outlined,
+              'Safe to spend, daily',
+              'One number, updated every morning',
+            ),
+            const SizedBox(height: SteadySpace.s4),
+            feature(
+              Icons.balance_outlined,
+              'Check before you buy',
+              'See the trade-off, not just the price',
+            ),
+            const SizedBox(height: SteadySpace.s4),
+            feature(
+              Icons.savings_outlined,
+              "Steady pay, even if income isn't",
+              'Built for freelance, gig and tips',
+            ),
+            const Spacer(),
+            SteadyButton(
+              'Get started',
+              kind: ButtonKind.highlight,
+              onPressed: () =>
+                  Navigator.of(context).pushNamed(Routes.onbIncome),
+            ),
+            const SizedBox(height: 14),
+            // Steady has no accounts; returning users restore a backup file.
+            TextButton(
+              onPressed: () => Navigator.of(context).pushNamed(Routes.backup),
+              style: TextButton.styleFrom(
+                foregroundColor: c.highlight,
+                minimumSize: const Size.fromHeight(44),
+              ),
+              child: const Text('Restore from a backup file'),
+            ),
+            if (kDebugMode)
+              TextButton(
+                onPressed: () {
+                  StoreScope.of(context).loadSample();
+                  Navigator.of(context)
+                      .pushNamedAndRemoveUntil(Routes.home, (_) => false);
+                },
+                style: TextButton.styleFrom(foregroundColor: c.onHeroMuted),
+                child: const Text('Debug: load sample data'),
+              ),
+          ],
         ),
-        children: [
-          const Align(alignment: Alignment.centerLeft, child: SteadyLogo()),
-          const SizedBox(height: 28),
-          Text(
-            'Know what you can spend today.',
-            style: SteadyType.title.copyWith(
-              fontSize: 42,
-              height: 1.05,
-              letterSpacing: -1,
-              color: c.onHero,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Steady sets aside your bills and goals first, then gives you one daily number you can trust.',
-            style: SteadyType.body.copyWith(
-              fontSize: 16,
-              height: 1.5,
-              color: c.onHeroMuted,
-            ),
-          ),
-          const SizedBox(height: 28),
-          feature(
-            Icons.today_outlined,
-            'Safe to spend, daily',
-            'One number, updated every morning',
-          ),
-          const SizedBox(height: SteadySpace.s4),
-          feature(
-            Icons.balance_outlined,
-            'Check before you buy',
-            'See the trade-off, not just the price',
-          ),
-          const SizedBox(height: SteadySpace.s4),
-          feature(
-            Icons.savings_outlined,
-            "Steady pay, even if income isn't",
-            'Built for freelance, gig and tips',
-          ),
-          const Spacer(),
-          SteadyButton(
-            'Get started',
-            kind: ButtonKind.highlight,
-            onPressed: () => Navigator.of(context).pushNamed(Routes.onbIncome),
-          ),
-          const SizedBox(height: 14),
-          // Steady has no accounts; returning users restore a backup file.
-          TextButton(
-            onPressed: () => Navigator.of(context).pushNamed(Routes.backup),
-            style: TextButton.styleFrom(
-              foregroundColor: c.highlight,
-              minimumSize: const Size.fromHeight(44),
-            ),
-            child: const Text('Restore from a backup file'),
-          ),
-        ],
       ),
     );
   }
