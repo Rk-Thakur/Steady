@@ -112,6 +112,7 @@ class AppSettings {
     this.weekStartsOn = DateTime.sunday,
     this.theme = ThemePreference.system,
     this.appLockEnabled = false,
+    this.biometricUnlock = false,
     this.pin,
     this.lastBackupOn,
     this.overspendStrategy = OverspendStrategy.spreadEvenly,
@@ -132,6 +133,9 @@ class AppSettings {
   final int weekStartsOn;
   final ThemePreference theme;
   final bool appLockEnabled;
+
+  /// App lock: unlock with Face ID / fingerprint as well as the PIN.
+  final bool biometricUnlock;
 
   /// App lock PIN. Kept in memory for now; moves to the Keychain / Keystore
   /// with the encrypted database.
@@ -155,6 +159,7 @@ class AppSettings {
     int? weekStartsOn,
     ThemePreference? theme,
     bool? appLockEnabled,
+    bool? biometricUnlock,
     String? Function()? pin,
     LocalDate? Function()? lastBackupOn,
     OverspendStrategy? overspendStrategy,
@@ -173,6 +178,7 @@ class AppSettings {
       weekStartsOn: weekStartsOn ?? this.weekStartsOn,
       theme: theme ?? this.theme,
       appLockEnabled: appLockEnabled ?? this.appLockEnabled,
+      biometricUnlock: biometricUnlock ?? this.biometricUnlock,
       pin: pin != null ? pin() : this.pin,
       lastBackupOn: lastBackupOn != null ? lastBackupOn() : this.lastBackupOn,
       overspendStrategy: overspendStrategy ?? this.overspendStrategy,

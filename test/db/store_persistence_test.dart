@@ -178,7 +178,10 @@ void main() {
     var store = await launchWithSample();
     store.handleOverspend(OverspendStrategy.spreadEvenly);
     store = await restart(store);
-    expect(store.overspendHandledOn(oct2), OverspendStrategy.spreadEvenly);
+    expect(
+      store.overspendHandledOn(oct2),
+      const OverspendDecision(OverspendStrategy.spreadEvenly),
+    );
   });
 
   group('App lock PIN', () {

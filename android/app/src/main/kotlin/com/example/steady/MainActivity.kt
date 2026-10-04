@@ -1,5 +1,6 @@
 package com.example.steady
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// A FragmentActivity so local_auth can show the fingerprint / face dialog.
+class MainActivity : FlutterFragmentActivity()

@@ -151,7 +151,9 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
     final lockOn = s.appLockEnabled && s.pin != null;
     switch (state) {
       case AppLifecycleState.inactive || AppLifecycleState.hidden:
-        if (lockOn) setState(() => _covered = true);
+        // The lock screen shows nothing private, so it stays visible behind
+        // the Face ID / fingerprint dialog instead of the cover.
+        if (lockOn && !_lockShowing) setState(() => _covered = true);
       case AppLifecycleState.paused:
         _backgroundedAt ??= DateTime.now();
       case AppLifecycleState.resumed:

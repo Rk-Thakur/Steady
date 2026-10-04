@@ -32,7 +32,7 @@ class BudgetSnapshot {
   final Vault? vault;
   final ExpenseSplit? split;
   final List<SharedExpense> sharedExpenses;
-  final Map<LocalDate, OverspendStrategy> overspendDecisions;
+  final Map<LocalDate, OverspendDecision> overspendDecisions;
 
   /// Each past day's number (its allowance before spending), as recorded.
   final Map<LocalDate, int> dailyNumbers;
@@ -119,7 +119,14 @@ class BudgetRepository {
             paidByYou: r.paidByYou,
           ),
       ],
-      overspendDecisions: {for (final r in decisions) r.localDate: r.strategy},
+      overspendDecisions: {
+        for (final r in decisions)
+          r.localDate: OverspendDecision(
+            r.strategy,
+            categoryId: r.categoryId,
+            amountCents: r.amountCents,
+          ),
+      },
       dailyNumbers: {for (final r in numbers) r.localDate: r.allowanceCents},
     );
   });
@@ -142,6 +149,7 @@ class BudgetRepository {
           weekStartsOn: Value(s.weekStartsOn),
           theme: s.theme,
           appLockEnabled: Value(s.appLockEnabled),
+          biometricUnlock: Value(s.biometricUnlock),
           overspendStrategy: s.overspendStrategy,
           onboarded: Value(s.onboarded),
           lastBackupOn: Value(s.lastBackupOn),
@@ -312,10 +320,15 @@ class BudgetRepository {
 
   // ─── Overspend ───────────────────────────────────────────────────────────
 
-  Future<void> saveOverspendDecision(LocalDate day, OverspendStrategy s) => _db
+  Future<void> saveOverspendDecision(LocalDate day, OverspendDecision d) => _db
       .into(_db.overspendDecisions)
       .insertOnConflictUpdate(
-        OverspendDecisionsCompanion.insert(localDate: day, strategy: s),
+        OverspendDecisionsCompanion.insert(
+          localDate: day,
+          strategy: d.strategy,
+          categoryId: Value(d.categoryId),
+          amountCents: Value(d.amountCents),
+        ),
       );
 
   Future<void> saveDailyNumber(LocalDate day, int allowanceCents) => _db
@@ -378,6 +391,7 @@ class BudgetRepository {
     weekStartsOn: r.weekStartsOn,
     theme: r.theme,
     appLockEnabled: r.appLockEnabled,
+    biometricUnlock: r.biometricUnlock,
     overspendStrategy: r.overspendStrategy,
     onboarded: r.onboarded,
     lastBackupOn: r.lastBackupOn,

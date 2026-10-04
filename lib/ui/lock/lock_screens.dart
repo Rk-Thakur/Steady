@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/biometrics.dart';
 import '../../data/store_scope.dart';
 import '../../theme/tokens.dart';
 import '../onboarding/onboarding_screens.dart';
@@ -189,10 +190,35 @@ class _LockScreenState extends State<LockScreen> {
   String? _error;
   int _attempts = 0;
 
+  /// "Face ID" etc. when biometric unlock is on and available. It's offered
+  /// above the PIN pad and only asked for when tapped.
+  String? _biometric;
+  bool _asking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!StoreScope.read(context).settings.biometricUnlock) return;
+      final name = await Biometrics.instance.availableName();
+      if (mounted && name != null) setState(() => _biometric = name);
+    });
+  }
+
+  Future<void> _askBiometric() async {
+    if (_asking) return;
+    setState(() => _asking = true);
+    final ok = await Biometrics.instance.authenticate('Unlock Steady');
+    if (!mounted) return;
+    setState(() => _asking = false);
+    if (ok) Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final c = context.colors;
+    final biometric = _biometric;
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -211,7 +237,17 @@ class _LockScreenState extends State<LockScreen> {
                     'Enter your PIN to see your numbers.',
                     style: SteadyType.body.copyWith(color: c.muted),
                   ),
-                  const SizedBox(height: SteadySpace.s7),
+                  const SizedBox(height: SteadySpace.s6),
+                  // Just above the PIN pad: the quicker way in, on request.
+                  if (biometric != null)
+                    _BiometricOption(
+                      name: biometric,
+                      busy: _asking,
+                      onTap: _askBiometric,
+                    )
+                  else
+                    const SizedBox(height: 44),
+                  const SizedBox(height: SteadySpace.s4),
                   PinPad(
                     error: _error,
                     onComplete: (pin) {
@@ -297,6 +333,70 @@ class _SetPinScreenState extends State<SetPinScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// "You can also unlock with Face ID" (iOS) / "…with your fingerprint"
+/// (Android), shown just above the PIN pad.
+class _BiometricOption extends StatelessWidget {
+  const _BiometricOption({
+    required this.name,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final face = name.toLowerCase().startsWith('face');
+    // Product names stay as they are; "fingerprint" reads as "your fingerprint".
+    final what = name[0] == name[0].toUpperCase() ? name : 'your $name';
+    return Semantics(
+      button: true,
+      enabled: !busy,
+      child: Material(
+        color: c.primarySoft,
+        borderRadius: BorderRadius.circular(SteadyRadius.pill),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(SteadyRadius.pill),
+          onTap: busy ? null : onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: SteadySpace.s4,
+                vertical: 10,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    face ? Icons.face_outlined : Icons.fingerprint_rounded,
+                    size: 22,
+                    color: c.primary,
+                  ),
+                  const SizedBox(width: SteadySpace.s2),
+                  Flexible(
+                    child: Text(
+                      'You can also unlock with $what',
+                      style: SteadyType.body.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: c.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

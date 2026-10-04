@@ -133,4 +133,22 @@ void main() {
     await verifier.migrateAndValidate(db, 5);
     await db.close();
   });
+
+  test('a v4 database that already has the reminder columns upgrades', () async {
+    final schema = await verifier.schemaAt(4);
+    for (final sql in [
+      'ALTER TABLE settings_rows ADD COLUMN remind_log_spends INTEGER NOT NULL DEFAULT 1',
+      'ALTER TABLE settings_rows ADD COLUMN remind_log_at INTEGER NOT NULL DEFAULT 1230',
+      'ALTER TABLE settings_rows ADD COLUMN remind_bills INTEGER NOT NULL DEFAULT 1',
+      'ALTER TABLE settings_rows ADD COLUMN remind_late_pause INTEGER NOT NULL DEFAULT 1',
+      'ALTER TABLE settings_rows ADD COLUMN remind_recaps INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE settings_rows ADD COLUMN remind_backup INTEGER NOT NULL DEFAULT 1',
+      'ALTER TABLE settings_rows ADD COLUMN quiet_from INTEGER NOT NULL DEFAULT 1380',
+    ]) {
+      schema.rawDatabase.execute(sql);
+    }
+    final db = SteadyDatabase(schema.newConnection());
+    await db.customSelect('SELECT 1').get(); // runs the migration
+    await db.close();
+  });
 }

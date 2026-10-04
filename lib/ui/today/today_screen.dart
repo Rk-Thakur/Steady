@@ -262,23 +262,24 @@ class _OverspentFix extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final c = context.colors;
-    final tomorrow = DailyNumberCalculator.tomorrow(number);
-    final spreadDays = tomorrow.daysLeft;
-    final over = formatMoney(number.overspentByCents, symbol: symbol);
+    String m(int cents) => formatMoney(cents, symbol: symbol);
     final handled = store.overspendHandledOn(store.today);
-    // The category with the most limit left covers it (design: Fun money).
-    final source = store.categories
-        .where((c) => (c.monthlyLimitCents ?? 0) >= number.overspentByCents)
-        .fold<BudgetCategory?>(
-          null,
-          (best, c) =>
-              best == null ||
-                  c.id == 'fun' ||
-                  (best.id != 'fun' &&
-                      c.monthlyLimitCents! > best.monthlyLimitCents!)
-              ? c
-              : best,
-        );
+    final over = m(
+      handled?.takesFromCategory == true
+          ? handled!.amountCents
+          : number.overspentByCents,
+    );
+    // Before a choice: what spreading would do. After: what actually happens.
+    final tomorrow = handled == null
+        ? DailyNumberCalculator.tomorrow(number)
+        : store.tomorrowNumber;
+    final spreadDays = tomorrow.daysLeft;
+    final source = handled == null
+        ? store.overspendCoverFor(number.overspentByCents)
+        : handled.takesFromCategory
+        ? store.categoryById(handled.categoryId)
+        : null;
+    final sourceLeft = source == null ? null : store.leftThisMonth(source);
 
     final card = Container(
       padding: const EdgeInsets.all(SteadySpace.s4),
@@ -299,21 +300,30 @@ class _OverspentFix extends StatelessWidget {
               style: SteadyType.body.copyWith(fontSize: 14, height: 1.5),
               children: [
                 TextSpan(
-                  text: switch (handled) {
-                    OverspendStrategy.takeFromCategory =>
-                      '$over came out of this month\'s ${source?.name ?? 'category'} limit. Tomorrow\'s number: ',
-                    _ =>
-                      "We'll spread $over over the next $spreadDays ${spreadDays == 1 ? 'day' : 'days'}. Tomorrow's number: ",
-                  },
+                  text: handled?.takesFromCategory == true
+                      ? "$over came out of what's left of ${source?.name ?? 'that category'} "
+                            "this month${sourceLeft == null ? '' : ' (${m(sourceLeft)} left)'}. "
+                            "Tomorrow's number: "
+                      : "We'll spread $over over the next $spreadDays "
+                            "${spreadDays == 1 ? 'day' : 'days'}. Tomorrow's number: ",
                 ),
                 TextSpan(
-                  text: formatMoney(tomorrow.safeToSpendCents, symbol: symbol),
+                  text: m(tomorrow.safeToSpendCents),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const TextSpan(text: '. Bills and goals are untouched.'),
               ],
             ),
           ),
+          if (handled?.takesFromCategory == true) ...[
+            const SizedBox(height: SteadySpace.s2),
+            Text(
+              'Spend less on ${source?.name.toLowerCase() ?? 'it'} to make up '
+              "for it. If that spending goes past what's left, the rest is "
+              'spread over your remaining days.',
+              style: SteadyType.caption.copyWith(color: c.muted),
+            ),
+          ],
         ],
       ),
     );

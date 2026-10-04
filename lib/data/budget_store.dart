@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../core/local_date.dart';
+import '../domain/category_cover.dart';
 import '../domain/reminders.dart';
 import '../domain/cycle.dart';
 import '../domain/daily_number.dart';
@@ -29,7 +30,7 @@ class BudgetStore extends ChangeNotifier {
     required this._vault,
     this._split,
     List<SharedExpense> sharedExpenses = const [],
-    Map<LocalDate, OverspendStrategy> overspendDecisions = const {},
+    Map<LocalDate, OverspendDecision> overspendDecisions = const {},
     Map<LocalDate, int> dailyNumbers = const {},
     LocalDate Function()? clock,
     BudgetRepository? repository,
@@ -61,6 +62,7 @@ class BudgetStore extends ChangeNotifier {
     settings = settings.copyWith(
       pin: () => pin,
       appLockEnabled: settings.appLockEnabled && pin != null,
+      biometricUnlock: settings.biometricUnlock && pin != null,
     );
     final store = BudgetStore(
       settings: settings,
@@ -139,7 +141,7 @@ class BudgetStore extends ChangeNotifier {
   final List<SharedExpense> _shared;
 
   /// How each day's overspend was handled (S4), by local date.
-  final Map<LocalDate, OverspendStrategy> _overspendHandled;
+  final Map<LocalDate, OverspendDecision> _overspendHandled;
   final Map<LocalDate, int> _dailyNumbers;
   final LocalDate Function() _clock;
   final BudgetRepository? _repo;
@@ -226,18 +228,64 @@ class BudgetStore extends ChangeNotifier {
     plan: _plan,
     entries: _entries,
     bills: _bills,
+    coveredCents: _coverOn(today, _entries),
   );
 
   /// The daily number if [entry] were logged now (live previews on forms).
-  DailyNumber previewWith(Entry entry) => DailyNumberCalculator.calculate(
-    DailyNumberCalculator.inputFromLedger(
-      today: today,
-      nextPayday: nextPayday,
-      plan: _plan,
-      entries: [..._entries, entry],
-      bills: _bills,
-    ),
+  /// A spend in a category that is covering an overspend can shrink that
+  /// cover, and the preview shows it.
+  DailyNumber previewWith(Entry entry) {
+    final entries = [..._entries, entry];
+    return DailyNumberCalculator.calculate(
+      DailyNumberCalculator.inputFromLedger(
+        today: today,
+        nextPayday: nextPayday,
+        plan: _plan,
+        entries: entries,
+        bills: _bills,
+        coveredCents: _coverOn(today, entries),
+      ),
+    );
+  }
+
+  /// Tomorrow's number if nothing else changes, including any overspend a
+  /// category took over today.
+  DailyNumber get tomorrowNumber {
+    final tomorrow = today.addDays(1);
+    return DailyNumberCalculator.tomorrow(
+      dailyNumber,
+      newCoverCents: _coverOn(tomorrow, _entries) - _coverOn(today, _entries),
+    );
+  }
+
+  int _coverOn(LocalDate day, List<Entry> entries) => categoryCoverCents(
+    today: day,
+    cycleStart: _plan.startDate,
+    decisions: _overspendHandled,
+    entries: entries,
+    categories: _categories,
   );
+
+  /// What's left of [category]'s budget this month (null without a limit).
+  int? leftThisMonth(BudgetCategory category) =>
+      leftInCategoryThisMonth(category, today, _entries, _overspendHandled);
+
+  /// The category that can cover today's overspend of [overCents]: Fun if it
+  /// has room (design), otherwise the one with the most left this month.
+  BudgetCategory? overspendCoverFor(int overCents) {
+    BudgetCategory? best;
+    int? bestLeft;
+    for (final c in _categories) {
+      final left = leftThisMonth(c);
+      if (left == null || left < overCents) continue;
+      if (c.id == 'fun') return c;
+      if (bestLeft == null || left > bestLeft) {
+        best = c;
+        bestLeft = left;
+      }
+    }
+    return best;
+  }
 
   /// Reminders to schedule from [now] (local time), from current settings
   /// and data. Today comes from the store's clock.
@@ -356,7 +404,7 @@ class BudgetStore extends ChangeNotifier {
     return _shared.fold(0, (sum, e) => sum + e.balanceEffectCents(s));
   }
 
-  OverspendStrategy? overspendHandledOn(LocalDate day) =>
+  OverspendDecision? overspendHandledOn(LocalDate day) =>
       _overspendHandled[day];
 
   /// Everything in the store, for saving to the database.
@@ -620,28 +668,24 @@ class BudgetStore extends ChangeNotifier {
   /// S4: the user chose how to absorb today's overspend.
   ///
   /// Spreading is what the daily-number rule already does. Taking it from a
-  /// category lowers that category's monthly limit by [overCents]; category
-  /// envelopes are not part of the daily-number engine yet, so tomorrow's
-  /// number is still re-spread.
+  /// category records that [categoryId]'s unspent money this month covers
+  /// [overCents], so it isn't spread over the next days (see
+  /// [categoryCoverCents]). The category's monthly limit itself is unchanged.
   void handleOverspend(
     OverspendStrategy strategy, {
     String? categoryId,
     int overCents = 0,
   }) {
     final day = today;
-    _overspendHandled[day] = strategy;
-    _save((r) => r.saveOverspendDecision(day, strategy));
-    if (strategy == OverspendStrategy.takeFromCategory && categoryId != null) {
-      final cat = categoryById(categoryId);
-      final limit = cat?.monthlyLimitCents;
-      if (cat != null && limit != null) {
-        upsertCategory(
-          cat.copyWith(
-            monthlyLimitCents: () => (limit - overCents).clamp(0, limit),
-          ),
-        );
-      }
-    }
+    final decision = strategy == OverspendStrategy.takeFromCategory
+        ? OverspendDecision(
+            strategy,
+            categoryId: categoryId,
+            amountCents: overCents,
+          )
+        : OverspendDecision(strategy);
+    _overspendHandled[day] = decision;
+    _save((r) => r.saveOverspendDecision(day, decision));
     notifyListeners();
   }
 
@@ -729,7 +773,11 @@ class BudgetStore extends ChangeNotifier {
   }
 
   void _replaceWith(BudgetSnapshot s) {
-    _settings = s.settings!.copyWith(appLockEnabled: false, pin: () => null);
+    _settings = s.settings!.copyWith(
+      appLockEnabled: false,
+      biometricUnlock: false,
+      pin: () => null,
+    );
     _plan = s.plan!;
     _categories
       ..clear()

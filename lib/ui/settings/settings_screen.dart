@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../app/biometrics.dart';
 import '../../core/date_format.dart';
 import '../../data/store_scope.dart';
 import '../../domain/models/models.dart';
@@ -174,10 +175,15 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: (v) => v
                     ? Navigator.of(context).pushNamed(Routes.setPin)
                     : store.updateSettings(
-                        s.copyWith(appLockEnabled: false, pin: () => null),
+                        s.copyWith(
+                          appLockEnabled: false,
+                          biometricUnlock: false,
+                          pin: () => null,
+                        ),
                       ),
               ),
             ),
+            if (s.appLockEnabled) const _BiometricRow(),
             NavRow(
               icon: Icons.help_outline_rounded,
               tone: BannerTone.neutral,
@@ -228,5 +234,80 @@ class _Group extends StatelessWidget {
       const SizedBox(height: 6),
       GroupedList(children: children),
     ],
+  );
+}
+
+/// "Unlock with Face ID". Greyed out with a pointer to the phone's Settings
+/// when biometrics aren't set up yet; checked again on returning to the app.
+/// Turning it on asks once, so it's known to work before the lock relies on
+/// it.
+class _BiometricRow extends StatefulWidget {
+  const _BiometricRow();
+
+  @override
+  State<_BiometricRow> createState() => _BiometricRowState();
+}
+
+class _BiometricRowState extends State<_BiometricRow> {
+  late Future<(String?, bool)> _check = _run();
+  late final _lifecycle = AppLifecycleListener(
+    onResume: () => setState(() => _check = _run()),
+  );
+
+  static Future<(String?, bool)> _run() async => (
+    await Biometrics.instance.availableName(),
+    await Biometrics.instance.canBeSetUp(),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle; // start listening
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<(String?, bool)>(
+    future: _check,
+    builder: (context, snap) {
+      final (name, canSetUp) = snap.data ?? (null, false);
+      if (name == null && !canSetUp) return const SizedBox.shrink();
+      final ios = Theme.of(context).platform == TargetPlatform.iOS;
+      final label = name ?? (ios ? 'Face ID or Touch ID' : 'fingerprint');
+      final store = StoreScope.of(context);
+      final s = store.settings;
+      return NavRow(
+        icon: label.toLowerCase().startsWith('face')
+            ? Icons.face_outlined
+            : Icons.fingerprint_rounded,
+        tone: BannerTone.neutral,
+        label: 'Unlock with $label',
+        subtitle: name == null
+            ? "Set it up in your phone's Settings app to use it here"
+            : 'Your PIN still works too',
+        trailing: SteadySwitch(
+          value: name != null && s.biometricUnlock,
+          label: 'Unlock with $label',
+          onChanged: name == null
+              ? null
+              : (v) async {
+                  if (v &&
+                      !await Biometrics.instance.authenticate(
+                        'Turn on $name for Steady',
+                      )) {
+                    return;
+                  }
+                  store.updateSettings(
+                    store.settings.copyWith(biometricUnlock: v),
+                  );
+                },
+        ),
+      );
+    },
   );
 }

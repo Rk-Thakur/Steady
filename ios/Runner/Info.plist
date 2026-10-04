@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Steady</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Steady uses Face ID to unlock the app instead of your PIN. Your face data stays with iOS and never reaches Steady.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

@@ -40,7 +40,7 @@ class SteadyDatabase extends _$SteadyDatabase {
   SteadyDatabase(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -82,14 +82,20 @@ class SteadyDatabase extends _$SteadyDatabase {
         await m.addColumn(schema.goals, schema.goals.createdOn);
       },
       from4To5: (m, schema) async {
-        // Development builds briefly had a v4 without goals.created_on.
-        final goalColumns = await customSelect(
-          'PRAGMA table_info(goals)',
-        ).map((r) => r.read<String>('name')).get();
-        if (!goalColumns.contains('created_on')) {
+        // Development builds briefly had two different v4s: one without
+        // goals.created_on, one that already had the reminder columns. Add
+        // only what's missing so both upgrade.
+        Future<Set<String>> columnsOf(String table) async => {
+          ...await customSelect('PRAGMA table_info($table)')
+              .map((r) => r.read<String>('name'))
+              .get(),
+        };
+        final goals = await columnsOf('goals');
+        if (!goals.contains('created_on')) {
           await m.addColumn(schema.goals, schema.goals.createdOn);
         }
         final s = schema.settingsRows;
+        final existing = await columnsOf('settings_rows');
         for (final column in [
           s.remindLogSpends,
           s.remindLogAt,
@@ -99,8 +105,19 @@ class SteadyDatabase extends _$SteadyDatabase {
           s.remindBackup,
           s.quietFrom,
         ]) {
-          await m.addColumn(s, column);
+          if (!existing.contains(column.name)) await m.addColumn(s, column);
         }
+      },
+      from5To6: (m, schema) async {
+        final d = schema.overspendDecisions;
+        await m.addColumn(d, d.categoryId);
+        await m.addColumn(d, d.amountCents);
+      },
+      from6To7: (m, schema) async {
+        await m.addColumn(
+          schema.settingsRows,
+          schema.settingsRows.biometricUnlock,
+        );
       },
     ),
     beforeOpen: (details) async {
@@ -152,6 +169,10 @@ class SettingsRows extends Table {
   BoolColumn get remindRecaps => boolean().withDefault(const Constant(false))();
   BoolColumn get remindBackup => boolean().withDefault(const Constant(true))();
   IntColumn get quietFrom => integer().withDefault(const Constant(1380))();
+
+  /// v7: App lock also opens with Face ID / fingerprint.
+  BoolColumn get biometricUnlock =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -304,6 +325,10 @@ class SharedExpenses extends Table {
 class OverspendDecisions extends Table {
   TextColumn get localDate => text().map(const LocalDateConverter())();
   TextColumn get strategy => textEnum<OverspendStrategy>()();
+
+  /// v6: "Take it from Fun money" — which category covered how much.
+  TextColumn get categoryId => text().nullable()();
+  IntColumn get amountCents => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {localDate};

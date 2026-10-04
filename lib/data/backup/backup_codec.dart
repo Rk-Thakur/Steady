@@ -57,7 +57,12 @@ abstract final class BackupCodec {
         },
     ],
     'overspendDecisions': {
-      for (final d in s.overspendDecisions.entries) d.key.toIso(): d.value.name,
+      for (final d in s.overspendDecisions.entries)
+        d.key.toIso(): {
+          'strategy': d.value.strategy.name,
+          'categoryId': d.value.categoryId,
+          'amountCents': d.value.amountCents,
+        },
     },
     'dailyNumbers': {
       for (final d in s.dailyNumbers.entries) d.key.toIso(): d.value,
@@ -125,9 +130,7 @@ abstract final class BackupCodec {
               in ((j['overspendDecisions'] ?? const <String, Object?>{})
                       as Map<String, Object?>)
                   .entries)
-            LocalDate.parse(d.key): OverspendStrategy.values.byName(
-              d.value! as String,
-            ),
+            LocalDate.parse(d.key): _decisionFrom(d.value),
         },
         // Absent in backups made before Stage 7.
         dailyNumbers: {
@@ -188,6 +191,19 @@ abstract final class BackupCodec {
     lastBackupOn: _dateOrNull(s['lastBackupOn']),
     reminders: _remindersFrom(s['reminders'] as Map<String, Object?>?),
   );
+
+  // Backups made before Stage 7 store just the strategy name.
+  static OverspendDecision _decisionFrom(Object? v) {
+    if (v is String) {
+      return OverspendDecision(OverspendStrategy.values.byName(v));
+    }
+    final d = v! as Map<String, Object?>;
+    return OverspendDecision(
+      OverspendStrategy.values.byName(d['strategy']! as String),
+      categoryId: d['categoryId'] as String?,
+      amountCents: d['amountCents'] as int? ?? 0,
+    );
+  }
 
   // Absent in backups made before Stage 7: the defaults apply.
   static ReminderSettings _remindersFrom(Map<String, Object?>? r) {

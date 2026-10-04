@@ -81,9 +81,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       ),
                     ),
                     Text(
-                      cat.monthlyLimitCents == null
-                          ? 'No limit'
-                          : '${formatMoney(cat.monthlyLimitCents!, symbol: symbol, showCents: false)} / mo',
+                      _limitLabel(store.leftThisMonth(cat), cat, symbol),
                       style: SteadyType.caption.copyWith(
                         fontWeight: FontWeight.w500,
                         color: c.muted,
@@ -172,4 +170,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       _ => '${n}th',
     };
   }
+}
+
+/// "$64 left of $90", "$5 over $90", or "No limit". Left counts this month's
+/// spending and anything taken to cover an overspend.
+String _limitLabel(int? left, BudgetCategory cat, String symbol) {
+  final limit = cat.monthlyLimitCents;
+  if (limit == null || left == null) return 'No limit';
+  String whole(int cents) =>
+      formatMoney(cents, symbol: symbol, showCents: false);
+  return left >= 0
+      ? '${whole(left)} left of ${whole(limit)}'
+      : '${whole(-left)} over ${whole(limit)}';
 }

@@ -706,7 +706,8 @@ class Segmented<T> extends StatelessWidget {
   }
 }
 
-/// 52×32 switch with a 26px knob (role=switch).
+/// 52×32 switch with a 26px knob (role=switch). Null [onChanged] disables
+/// it (dimmed, not tappable).
 class SteadySwitch extends StatelessWidget {
   const SteadySwitch({
     super.key,
@@ -715,35 +716,40 @@ class SteadySwitch extends StatelessWidget {
     this.label,
   });
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
   final String? label;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final onChanged = this.onChanged;
     return Semantics(
       toggled: value,
+      enabled: onChanged != null,
       label: label,
       child: GestureDetector(
-        onTap: () => onChanged(!value),
-        child: AnimatedContainer(
-          duration: SteadyMotion.reduced,
-          width: 52,
-          height: 32,
-          padding: const EdgeInsets.all(3),
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          decoration: BoxDecoration(
-            color: value ? c.primary : c.inputBorder,
-            borderRadius: BorderRadius.circular(SteadyRadius.pill),
-          ),
-          child: Container(
-            width: 26,
-            height: 26,
+        onTap: onChanged == null ? null : () => onChanged(!value),
+        child: Opacity(
+          opacity: onChanged == null ? 0.4 : 1,
+          child: AnimatedContainer(
+            duration: SteadyMotion.reduced,
+            width: 52,
+            height: 32,
+            padding: const EdgeInsets.all(3),
+            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
             decoration: BoxDecoration(
-              color: value && c.primary == c.highlight
-                  ? c.onPrimary
-                  : Colors.white,
-              shape: BoxShape.circle,
+              color: value ? c.primary : c.inputBorder,
+              borderRadius: BorderRadius.circular(SteadyRadius.pill),
+            ),
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: value && c.primary == c.highlight
+                    ? c.onPrimary
+                    : Colors.white,
+                shape: BoxShape.circle,
+              ),
             ),
           ),
         ),

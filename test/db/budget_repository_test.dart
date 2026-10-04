@@ -166,11 +166,13 @@ void main() {
   });
 
   test('overspend decisions persist per day', () async {
-    await repo.saveOverspendDecision(oct2, OverspendStrategy.takeFromCategory);
-    expect(
-      (await repo.load()).overspendDecisions[oct2],
+    const decision = OverspendDecision(
       OverspendStrategy.takeFromCategory,
+      categoryId: 'fun',
+      amountCents: 1240,
     );
+    await repo.saveOverspendDecision(oct2, decision);
+    expect((await repo.load()).overspendDecisions[oct2], decision);
   });
 
   test('delete all my data empties every table', () async {

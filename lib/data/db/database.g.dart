@@ -248,6 +248,21 @@ class $SettingsRowsTable extends SettingsRows
     requiredDuringInsert: false,
     defaultValue: const Constant(1380),
   );
+  static const VerificationMeta _biometricUnlockMeta = const VerificationMeta(
+    'biometricUnlock',
+  );
+  @override
+  late final GeneratedColumn<bool> biometricUnlock = GeneratedColumn<bool>(
+    'biometric_unlock',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("biometric_unlock" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -270,6 +285,7 @@ class $SettingsRowsTable extends SettingsRows
     remindRecaps,
     remindBackup,
     quietFrom,
+    biometricUnlock,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -388,6 +404,15 @@ class $SettingsRowsTable extends SettingsRows
         quietFrom.isAcceptableOrUnknown(data['quiet_from']!, _quietFromMeta),
       );
     }
+    if (data.containsKey('biometric_unlock')) {
+      context.handle(
+        _biometricUnlockMeta,
+        biometricUnlock.isAcceptableOrUnknown(
+          data['biometric_unlock']!,
+          _biometricUnlockMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -491,6 +516,10 @@ class $SettingsRowsTable extends SettingsRows
         DriftSqlType.int,
         data['${effectivePrefix}quiet_from'],
       )!,
+      biometricUnlock: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}biometric_unlock'],
+      )!,
     );
   }
 
@@ -546,6 +575,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
   final bool remindRecaps;
   final bool remindBackup;
   final int quietFrom;
+
+  /// v7: App lock also opens with Face ID / fingerprint.
+  final bool biometricUnlock;
   const SettingsRow({
     required this.id,
     required this.currency,
@@ -567,6 +599,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     required this.remindRecaps,
     required this.remindBackup,
     required this.quietFrom,
+    required this.biometricUnlock,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -623,6 +656,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     map['remind_recaps'] = Variable<bool>(remindRecaps);
     map['remind_backup'] = Variable<bool>(remindBackup);
     map['quiet_from'] = Variable<int>(quietFrom);
+    map['biometric_unlock'] = Variable<bool>(biometricUnlock);
     return map;
   }
 
@@ -654,6 +688,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       remindRecaps: Value(remindRecaps),
       remindBackup: Value(remindBackup),
       quietFrom: Value(quietFrom),
+      biometricUnlock: Value(biometricUnlock),
     );
   }
 
@@ -692,6 +727,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       remindRecaps: serializer.fromJson<bool>(json['remindRecaps']),
       remindBackup: serializer.fromJson<bool>(json['remindBackup']),
       quietFrom: serializer.fromJson<int>(json['quietFrom']),
+      biometricUnlock: serializer.fromJson<bool>(json['biometricUnlock']),
     );
   }
   @override
@@ -730,6 +766,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       'remindRecaps': serializer.toJson<bool>(remindRecaps),
       'remindBackup': serializer.toJson<bool>(remindBackup),
       'quietFrom': serializer.toJson<int>(quietFrom),
+      'biometricUnlock': serializer.toJson<bool>(biometricUnlock),
     };
   }
 
@@ -754,6 +791,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     bool? remindRecaps,
     bool? remindBackup,
     int? quietFrom,
+    bool? biometricUnlock,
   }) => SettingsRow(
     id: id ?? this.id,
     currency: currency ?? this.currency,
@@ -777,6 +815,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     remindRecaps: remindRecaps ?? this.remindRecaps,
     remindBackup: remindBackup ?? this.remindBackup,
     quietFrom: quietFrom ?? this.quietFrom,
+    biometricUnlock: biometricUnlock ?? this.biometricUnlock,
   );
   SettingsRow copyWithCompanion(SettingsRowsCompanion data) {
     return SettingsRow(
@@ -830,6 +869,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           ? data.remindBackup.value
           : this.remindBackup,
       quietFrom: data.quietFrom.present ? data.quietFrom.value : this.quietFrom,
+      biometricUnlock: data.biometricUnlock.present
+          ? data.biometricUnlock.value
+          : this.biometricUnlock,
     );
   }
 
@@ -855,13 +897,14 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           ..write('remindLatePause: $remindLatePause, ')
           ..write('remindRecaps: $remindRecaps, ')
           ..write('remindBackup: $remindBackup, ')
-          ..write('quietFrom: $quietFrom')
+          ..write('quietFrom: $quietFrom, ')
+          ..write('biometricUnlock: $biometricUnlock')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     currency,
     payFrequency,
@@ -882,7 +925,8 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     remindRecaps,
     remindBackup,
     quietFrom,
-  );
+    biometricUnlock,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -906,7 +950,8 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           other.remindLatePause == this.remindLatePause &&
           other.remindRecaps == this.remindRecaps &&
           other.remindBackup == this.remindBackup &&
-          other.quietFrom == this.quietFrom);
+          other.quietFrom == this.quietFrom &&
+          other.biometricUnlock == this.biometricUnlock);
 }
 
 class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
@@ -930,6 +975,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
   final Value<bool> remindRecaps;
   final Value<bool> remindBackup;
   final Value<int> quietFrom;
+  final Value<bool> biometricUnlock;
   const SettingsRowsCompanion({
     this.id = const Value.absent(),
     this.currency = const Value.absent(),
@@ -951,6 +997,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     this.remindRecaps = const Value.absent(),
     this.remindBackup = const Value.absent(),
     this.quietFrom = const Value.absent(),
+    this.biometricUnlock = const Value.absent(),
   });
   SettingsRowsCompanion.insert({
     this.id = const Value.absent(),
@@ -973,6 +1020,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     this.remindRecaps = const Value.absent(),
     this.remindBackup = const Value.absent(),
     this.quietFrom = const Value.absent(),
+    this.biometricUnlock = const Value.absent(),
   }) : currency = Value(currency),
        payFrequency = Value(payFrequency),
        nextPayday = Value(nextPayday),
@@ -1000,6 +1048,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Expression<bool>? remindRecaps,
     Expression<bool>? remindBackup,
     Expression<int>? quietFrom,
+    Expression<bool>? biometricUnlock,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1022,6 +1071,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       if (remindRecaps != null) 'remind_recaps': remindRecaps,
       if (remindBackup != null) 'remind_backup': remindBackup,
       if (quietFrom != null) 'quiet_from': quietFrom,
+      if (biometricUnlock != null) 'biometric_unlock': biometricUnlock,
     });
   }
 
@@ -1046,6 +1096,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Value<bool>? remindRecaps,
     Value<bool>? remindBackup,
     Value<int>? quietFrom,
+    Value<bool>? biometricUnlock,
   }) {
     return SettingsRowsCompanion(
       id: id ?? this.id,
@@ -1068,6 +1119,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       remindRecaps: remindRecaps ?? this.remindRecaps,
       remindBackup: remindBackup ?? this.remindBackup,
       quietFrom: quietFrom ?? this.quietFrom,
+      biometricUnlock: biometricUnlock ?? this.biometricUnlock,
     );
   }
 
@@ -1150,6 +1202,9 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     if (quietFrom.present) {
       map['quiet_from'] = Variable<int>(quietFrom.value);
     }
+    if (biometricUnlock.present) {
+      map['biometric_unlock'] = Variable<bool>(biometricUnlock.value);
+    }
     return map;
   }
 
@@ -1175,7 +1230,8 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
           ..write('remindLatePause: $remindLatePause, ')
           ..write('remindRecaps: $remindRecaps, ')
           ..write('remindBackup: $remindBackup, ')
-          ..write('quietFrom: $quietFrom')
+          ..write('quietFrom: $quietFrom, ')
+          ..write('biometricUnlock: $biometricUnlock')
           ..write(')'))
         .toString();
   }
@@ -5191,13 +5247,66 @@ class $OverspendDecisionsTable extends OverspendDecisions
       ).withConverter<OverspendStrategy>(
         $OverspendDecisionsTable.$converterstrategy,
       );
+  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
+    'categoryId',
+  );
   @override
-  List<GeneratedColumn> get $columns => [localDate, strategy];
+  late final GeneratedColumn<String> categoryId = GeneratedColumn<String>(
+    'category_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _amountCentsMeta = const VerificationMeta(
+    'amountCents',
+  );
+  @override
+  late final GeneratedColumn<int> amountCents = GeneratedColumn<int>(
+    'amount_cents',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    localDate,
+    strategy,
+    categoryId,
+    amountCents,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
   static const String $name = 'overspend_decisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OverspendDecisionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('category_id')) {
+      context.handle(
+        _categoryIdMeta,
+        categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
+      );
+    }
+    if (data.containsKey('amount_cents')) {
+      context.handle(
+        _amountCentsMeta,
+        amountCents.isAcceptableOrUnknown(
+          data['amount_cents']!,
+          _amountCentsMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
   @override
   Set<GeneratedColumn> get $primaryKey => {localDate};
   @override
@@ -5216,6 +5325,14 @@ class $OverspendDecisionsTable extends OverspendDecisions
           data['${effectivePrefix}strategy'],
         )!,
       ),
+      categoryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category_id'],
+      ),
+      amountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount_cents'],
+      )!,
     );
   }
 
@@ -5236,7 +5353,16 @@ class OverspendDecisionRow extends DataClass
     implements Insertable<OverspendDecisionRow> {
   final LocalDate localDate;
   final OverspendStrategy strategy;
-  const OverspendDecisionRow({required this.localDate, required this.strategy});
+
+  /// v6: "Take it from Fun money" — which category covered how much.
+  final String? categoryId;
+  final int amountCents;
+  const OverspendDecisionRow({
+    required this.localDate,
+    required this.strategy,
+    this.categoryId,
+    required this.amountCents,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -5250,6 +5376,10 @@ class OverspendDecisionRow extends DataClass
         $OverspendDecisionsTable.$converterstrategy.toSql(strategy),
       );
     }
+    if (!nullToAbsent || categoryId != null) {
+      map['category_id'] = Variable<String>(categoryId);
+    }
+    map['amount_cents'] = Variable<int>(amountCents);
     return map;
   }
 
@@ -5257,6 +5387,10 @@ class OverspendDecisionRow extends DataClass
     return OverspendDecisionsCompanion(
       localDate: Value(localDate),
       strategy: Value(strategy),
+      categoryId: categoryId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(categoryId),
+      amountCents: Value(amountCents),
     );
   }
 
@@ -5270,6 +5404,8 @@ class OverspendDecisionRow extends DataClass
       strategy: $OverspendDecisionsTable.$converterstrategy.fromJson(
         serializer.fromJson<String>(json['strategy']),
       ),
+      categoryId: serializer.fromJson<String?>(json['categoryId']),
+      amountCents: serializer.fromJson<int>(json['amountCents']),
     );
   }
   @override
@@ -5280,20 +5416,32 @@ class OverspendDecisionRow extends DataClass
       'strategy': serializer.toJson<String>(
         $OverspendDecisionsTable.$converterstrategy.toJson(strategy),
       ),
+      'categoryId': serializer.toJson<String?>(categoryId),
+      'amountCents': serializer.toJson<int>(amountCents),
     };
   }
 
   OverspendDecisionRow copyWith({
     LocalDate? localDate,
     OverspendStrategy? strategy,
+    Value<String?> categoryId = const Value.absent(),
+    int? amountCents,
   }) => OverspendDecisionRow(
     localDate: localDate ?? this.localDate,
     strategy: strategy ?? this.strategy,
+    categoryId: categoryId.present ? categoryId.value : this.categoryId,
+    amountCents: amountCents ?? this.amountCents,
   );
   OverspendDecisionRow copyWithCompanion(OverspendDecisionsCompanion data) {
     return OverspendDecisionRow(
       localDate: data.localDate.present ? data.localDate.value : this.localDate,
       strategy: data.strategy.present ? data.strategy.value : this.strategy,
+      categoryId: data.categoryId.present
+          ? data.categoryId.value
+          : this.categoryId,
+      amountCents: data.amountCents.present
+          ? data.amountCents.value
+          : this.amountCents,
     );
   }
 
@@ -5301,45 +5449,59 @@ class OverspendDecisionRow extends DataClass
   String toString() {
     return (StringBuffer('OverspendDecisionRow(')
           ..write('localDate: $localDate, ')
-          ..write('strategy: $strategy')
+          ..write('strategy: $strategy, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('amountCents: $amountCents')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(localDate, strategy);
+  int get hashCode => Object.hash(localDate, strategy, categoryId, amountCents);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is OverspendDecisionRow &&
           other.localDate == this.localDate &&
-          other.strategy == this.strategy);
+          other.strategy == this.strategy &&
+          other.categoryId == this.categoryId &&
+          other.amountCents == this.amountCents);
 }
 
 class OverspendDecisionsCompanion
     extends UpdateCompanion<OverspendDecisionRow> {
   final Value<LocalDate> localDate;
   final Value<OverspendStrategy> strategy;
+  final Value<String?> categoryId;
+  final Value<int> amountCents;
   final Value<int> rowid;
   const OverspendDecisionsCompanion({
     this.localDate = const Value.absent(),
     this.strategy = const Value.absent(),
+    this.categoryId = const Value.absent(),
+    this.amountCents = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   OverspendDecisionsCompanion.insert({
     required LocalDate localDate,
     required OverspendStrategy strategy,
+    this.categoryId = const Value.absent(),
+    this.amountCents = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : localDate = Value(localDate),
        strategy = Value(strategy);
   static Insertable<OverspendDecisionRow> custom({
     Expression<String>? localDate,
     Expression<String>? strategy,
+    Expression<String>? categoryId,
+    Expression<int>? amountCents,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (localDate != null) 'local_date': localDate,
       if (strategy != null) 'strategy': strategy,
+      if (categoryId != null) 'category_id': categoryId,
+      if (amountCents != null) 'amount_cents': amountCents,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5347,11 +5509,15 @@ class OverspendDecisionsCompanion
   OverspendDecisionsCompanion copyWith({
     Value<LocalDate>? localDate,
     Value<OverspendStrategy>? strategy,
+    Value<String?>? categoryId,
+    Value<int>? amountCents,
     Value<int>? rowid,
   }) {
     return OverspendDecisionsCompanion(
       localDate: localDate ?? this.localDate,
       strategy: strategy ?? this.strategy,
+      categoryId: categoryId ?? this.categoryId,
+      amountCents: amountCents ?? this.amountCents,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5369,6 +5535,12 @@ class OverspendDecisionsCompanion
         $OverspendDecisionsTable.$converterstrategy.toSql(strategy.value),
       );
     }
+    if (categoryId.present) {
+      map['category_id'] = Variable<String>(categoryId.value);
+    }
+    if (amountCents.present) {
+      map['amount_cents'] = Variable<int>(amountCents.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5380,6 +5552,8 @@ class OverspendDecisionsCompanion
     return (StringBuffer('OverspendDecisionsCompanion(')
           ..write('localDate: $localDate, ')
           ..write('strategy: $strategy, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('amountCents: $amountCents, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5666,6 +5840,7 @@ typedef $$SettingsRowsTableCreateCompanionBuilder =
       Value<bool> remindRecaps,
       Value<bool> remindBackup,
       Value<int> quietFrom,
+      Value<bool> biometricUnlock,
     });
 typedef $$SettingsRowsTableUpdateCompanionBuilder =
     SettingsRowsCompanion Function({
@@ -5689,6 +5864,7 @@ typedef $$SettingsRowsTableUpdateCompanionBuilder =
       Value<bool> remindRecaps,
       Value<bool> remindBackup,
       Value<int> quietFrom,
+      Value<bool> biometricUnlock,
     });
 
 class $$SettingsRowsTableFilterComposer
@@ -5806,6 +5982,11 @@ class $$SettingsRowsTableFilterComposer
     column: $table.quietFrom,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnFilters<bool> get biometricUnlock => $composableBuilder(
+    column: $table.biometricUnlock,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$SettingsRowsTableOrderingComposer
@@ -5916,6 +6097,11 @@ class $$SettingsRowsTableOrderingComposer
     column: $table.quietFrom,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get biometricUnlock => $composableBuilder(
+    column: $table.biometricUnlock,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SettingsRowsTableAnnotationComposer
@@ -6021,6 +6207,11 @@ class $$SettingsRowsTableAnnotationComposer
 
   GeneratedColumn<int> get quietFrom =>
       $composableBuilder(column: $table.quietFrom, builder: (column) => column);
+
+  GeneratedColumn<bool> get biometricUnlock => $composableBuilder(
+    column: $table.biometricUnlock,
+    builder: (column) => column,
+  );
 }
 
 class $$SettingsRowsTableTableManager
@@ -6075,6 +6266,7 @@ class $$SettingsRowsTableTableManager
                 Value<bool> remindRecaps = const Value.absent(),
                 Value<bool> remindBackup = const Value.absent(),
                 Value<int> quietFrom = const Value.absent(),
+                Value<bool> biometricUnlock = const Value.absent(),
               }) => SettingsRowsCompanion(
                 id: id,
                 currency: currency,
@@ -6096,6 +6288,7 @@ class $$SettingsRowsTableTableManager
                 remindRecaps: remindRecaps,
                 remindBackup: remindBackup,
                 quietFrom: quietFrom,
+                biometricUnlock: biometricUnlock,
               ),
           createCompanionCallback:
               ({
@@ -6119,6 +6312,7 @@ class $$SettingsRowsTableTableManager
                 Value<bool> remindRecaps = const Value.absent(),
                 Value<bool> remindBackup = const Value.absent(),
                 Value<int> quietFrom = const Value.absent(),
+                Value<bool> biometricUnlock = const Value.absent(),
               }) => SettingsRowsCompanion.insert(
                 id: id,
                 currency: currency,
@@ -6140,6 +6334,7 @@ class $$SettingsRowsTableTableManager
                 remindRecaps: remindRecaps,
                 remindBackup: remindBackup,
                 quietFrom: quietFrom,
+                biometricUnlock: biometricUnlock,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -8238,12 +8433,16 @@ typedef $$OverspendDecisionsTableCreateCompanionBuilder =
     OverspendDecisionsCompanion Function({
       required LocalDate localDate,
       required OverspendStrategy strategy,
+      Value<String?> categoryId,
+      Value<int> amountCents,
       Value<int> rowid,
     });
 typedef $$OverspendDecisionsTableUpdateCompanionBuilder =
     OverspendDecisionsCompanion Function({
       Value<LocalDate> localDate,
       Value<OverspendStrategy> strategy,
+      Value<String?> categoryId,
+      Value<int> amountCents,
       Value<int> rowid,
     });
 
@@ -8267,6 +8466,16 @@ class $$OverspendDecisionsTableFilterComposer
     column: $table.strategy,
     builder: (column) => ColumnWithTypeConverterFilters(column),
   );
+
+  ColumnFilters<String> get categoryId => $composableBuilder(
+    column: $table.categoryId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$OverspendDecisionsTableOrderingComposer
@@ -8287,6 +8496,16 @@ class $$OverspendDecisionsTableOrderingComposer
     column: $table.strategy,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get categoryId => $composableBuilder(
+    column: $table.categoryId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$OverspendDecisionsTableAnnotationComposer
@@ -8303,6 +8522,16 @@ class $$OverspendDecisionsTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<OverspendStrategy, String> get strategy =>
       $composableBuilder(column: $table.strategy, builder: (column) => column);
+
+  GeneratedColumn<String> get categoryId => $composableBuilder(
+    column: $table.categoryId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => column,
+  );
 }
 
 class $$OverspendDecisionsTableTableManager
@@ -8347,20 +8576,28 @@ class $$OverspendDecisionsTableTableManager
               ({
                 Value<LocalDate> localDate = const Value.absent(),
                 Value<OverspendStrategy> strategy = const Value.absent(),
+                Value<String?> categoryId = const Value.absent(),
+                Value<int> amountCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => OverspendDecisionsCompanion(
                 localDate: localDate,
                 strategy: strategy,
+                categoryId: categoryId,
+                amountCents: amountCents,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required LocalDate localDate,
                 required OverspendStrategy strategy,
+                Value<String?> categoryId = const Value.absent(),
+                Value<int> amountCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => OverspendDecisionsCompanion.insert(
                 localDate: localDate,
                 strategy: strategy,
+                categoryId: categoryId,
+                amountCents: amountCents,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -18,6 +18,7 @@ class DailyNumberInput {
     this.incomeTodayCents = 0,
     this.spentTodayCents = 0,
     this.billPaymentsTodayCents = 0,
+    this.coveredCents = 0,
   });
 
   final LocalDate today;
@@ -35,6 +36,10 @@ class DailyNumberInput {
   /// Bills paid today. They were already reserved, so they leave the pool
   /// together with their reservation instead of counting as spent today.
   final int billPaymentsTodayCents;
+
+  /// Earlier overspends a category's unspent budget is covering ("Take it
+  /// from Fun money"), so they aren't spread over the coming days.
+  final int coveredCents;
 }
 
 @immutable
@@ -88,6 +93,7 @@ abstract final class DailyNumberCalculator {
     final days = daysLeft(input.today, input.nextPayday);
     final pool =
         input.moneyAtStartOfDayCents +
+        input.coveredCents +
         input.incomeTodayCents -
         input.billPaymentsTodayCents -
         input.unpaidBillsBeforePaydayCents -
@@ -109,6 +115,7 @@ abstract final class DailyNumberCalculator {
     required CyclePlan plan,
     required Iterable<Entry> entries,
     required Iterable<Bill> bills,
+    int coveredCents = 0,
   }) {
     var moneyAtStartOfDay = plan.openingBalanceCents;
     var incomeToday = 0;
@@ -147,12 +154,15 @@ abstract final class DailyNumberCalculator {
       incomeTodayCents: incomeToday,
       spentTodayCents: spentToday,
       billPaymentsTodayCents: billPaymentsToday,
+      coveredCents: coveredCents,
     );
   }
 
   /// What tomorrow's number will be if nothing else changes. Used by the
   /// overspent state ("Tomorrow's number: $62.96").
-  static DailyNumber tomorrow(DailyNumber today) {
+  ///
+  /// [newCoverCents]: an overspend covered by a category from tomorrow on.
+  static DailyNumber tomorrow(DailyNumber today, {int newCoverCents = 0}) {
     final i = today.input;
     return calculate(
       DailyNumberInput(
@@ -165,6 +175,7 @@ abstract final class DailyNumberCalculator {
             i.billPaymentsTodayCents,
         unpaidBillsBeforePaydayCents: i.unpaidBillsBeforePaydayCents,
         goalSetAsidesCents: i.goalSetAsidesCents,
+        coveredCents: i.coveredCents + newCoverCents,
       ),
     );
   }
