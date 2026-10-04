@@ -405,6 +405,14 @@ class BudgetStore extends ChangeNotifier {
   void refreshDay() {
     final t = today;
     var changed = false;
+    if (_vault.isActive && _vault.lastReleaseDate == null) {
+      // A Vault from before release tracking (schema v1): start counting
+      // from this week, without a back-dated release.
+      _vault = _vault.copyWith(lastReleaseDate: () => mondayOnOrBefore(t));
+      final vault = _vault;
+      _save((r) => r.saveVault(vault));
+      changed = true;
+    }
     // Safety bound: a couple of years of weekly events.
     for (var guard = 0; guard < 120; guard++) {
       final release = releasesDue(_vault, t).firstOrNull;
@@ -654,6 +662,20 @@ class BudgetStore extends ChangeNotifier {
     _save((r) => r.replaceAll(toSnapshot()));
     final vault = _pinVault;
     if (vault != null) _save((_) => vault.delete());
+  }
+
+  /// A backup file was created and saved.
+  void markBackedUp() =>
+      updateSettings(_settings.copyWith(lastBackupOn: () => today));
+
+  /// Restore from a backup file: replaces everything on this phone. App lock
+  /// is turned off (the PIN is never in a backup); then catch up to today.
+  void restoreFrom(BudgetSnapshot snapshot) {
+    _replaceWith(snapshot);
+    _save((r) => r.replaceAll(toSnapshot()));
+    final vault = _pinVault;
+    if (vault != null) _save((_) => vault.delete());
+    refreshDay();
   }
 
   /// Debug: swap everything for the design's demo data.

@@ -141,6 +141,15 @@ class $SettingsRowsTable extends SettingsRows
     defaultValue: const Constant(false),
   );
   @override
+  late final GeneratedColumnWithTypeConverter<LocalDate?, String> lastBackupOn =
+      GeneratedColumn<String>(
+        'last_backup_on',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<LocalDate?>($SettingsRowsTable.$converterlastBackupOnn);
+  @override
   List<GeneratedColumn> get $columns => [
     id,
     currency,
@@ -154,6 +163,7 @@ class $SettingsRowsTable extends SettingsRows
     appLockEnabled,
     overspendStrategy,
     onboarded,
+    lastBackupOn,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -281,6 +291,12 @@ class $SettingsRowsTable extends SettingsRows
         DriftSqlType.bool,
         data['${effectivePrefix}onboarded'],
       )!,
+      lastBackupOn: $SettingsRowsTable.$converterlastBackupOnn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}last_backup_on'],
+        ),
+      ),
     );
   }
 
@@ -305,6 +321,10 @@ class $SettingsRowsTable extends SettingsRows
   $converteroverspendStrategy = const EnumNameConverter<OverspendStrategy>(
     OverspendStrategy.values,
   );
+  static TypeConverter<LocalDate, String> $converterlastBackupOn =
+      const LocalDateConverter();
+  static TypeConverter<LocalDate?, String?> $converterlastBackupOnn =
+      NullAwareTypeConverter.wrap($converterlastBackupOn);
 }
 
 class SettingsRow extends DataClass implements Insertable<SettingsRow> {
@@ -320,6 +340,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
   final bool appLockEnabled;
   final OverspendStrategy overspendStrategy;
   final bool onboarded;
+
+  /// v3: when the user last created a .steady backup file.
+  final LocalDate? lastBackupOn;
   const SettingsRow({
     required this.id,
     required this.currency,
@@ -333,6 +356,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     required this.appLockEnabled,
     required this.overspendStrategy,
     required this.onboarded,
+    this.lastBackupOn,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -377,6 +401,11 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       );
     }
     map['onboarded'] = Variable<bool>(onboarded);
+    if (!nullToAbsent || lastBackupOn != null) {
+      map['last_backup_on'] = Variable<String>(
+        $SettingsRowsTable.$converterlastBackupOnn.toSql(lastBackupOn),
+      );
+    }
     return map;
   }
 
@@ -398,6 +427,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       appLockEnabled: Value(appLockEnabled),
       overspendStrategy: Value(overspendStrategy),
       onboarded: Value(onboarded),
+      lastBackupOn: lastBackupOn == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastBackupOn),
     );
   }
 
@@ -428,6 +460,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       overspendStrategy: $SettingsRowsTable.$converteroverspendStrategy
           .fromJson(serializer.fromJson<String>(json['overspendStrategy'])),
       onboarded: serializer.fromJson<bool>(json['onboarded']),
+      lastBackupOn: serializer.fromJson<LocalDate?>(json['lastBackupOn']),
     );
   }
   @override
@@ -458,6 +491,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
         ),
       ),
       'onboarded': serializer.toJson<bool>(onboarded),
+      'lastBackupOn': serializer.toJson<LocalDate?>(lastBackupOn),
     };
   }
 
@@ -474,6 +508,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     bool? appLockEnabled,
     OverspendStrategy? overspendStrategy,
     bool? onboarded,
+    Value<LocalDate?> lastBackupOn = const Value.absent(),
   }) => SettingsRow(
     id: id ?? this.id,
     currency: currency ?? this.currency,
@@ -489,6 +524,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     appLockEnabled: appLockEnabled ?? this.appLockEnabled,
     overspendStrategy: overspendStrategy ?? this.overspendStrategy,
     onboarded: onboarded ?? this.onboarded,
+    lastBackupOn: lastBackupOn.present ? lastBackupOn.value : this.lastBackupOn,
   );
   SettingsRow copyWithCompanion(SettingsRowsCompanion data) {
     return SettingsRow(
@@ -520,6 +556,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           ? data.overspendStrategy.value
           : this.overspendStrategy,
       onboarded: data.onboarded.present ? data.onboarded.value : this.onboarded,
+      lastBackupOn: data.lastBackupOn.present
+          ? data.lastBackupOn.value
+          : this.lastBackupOn,
     );
   }
 
@@ -537,7 +576,8 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           ..write('theme: $theme, ')
           ..write('appLockEnabled: $appLockEnabled, ')
           ..write('overspendStrategy: $overspendStrategy, ')
-          ..write('onboarded: $onboarded')
+          ..write('onboarded: $onboarded, ')
+          ..write('lastBackupOn: $lastBackupOn')
           ..write(')'))
         .toString();
   }
@@ -556,6 +596,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     appLockEnabled,
     overspendStrategy,
     onboarded,
+    lastBackupOn,
   );
   @override
   bool operator ==(Object other) =>
@@ -572,7 +613,8 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           other.theme == this.theme &&
           other.appLockEnabled == this.appLockEnabled &&
           other.overspendStrategy == this.overspendStrategy &&
-          other.onboarded == this.onboarded);
+          other.onboarded == this.onboarded &&
+          other.lastBackupOn == this.lastBackupOn);
 }
 
 class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
@@ -588,6 +630,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
   final Value<bool> appLockEnabled;
   final Value<OverspendStrategy> overspendStrategy;
   final Value<bool> onboarded;
+  final Value<LocalDate?> lastBackupOn;
   const SettingsRowsCompanion({
     this.id = const Value.absent(),
     this.currency = const Value.absent(),
@@ -601,6 +644,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     this.appLockEnabled = const Value.absent(),
     this.overspendStrategy = const Value.absent(),
     this.onboarded = const Value.absent(),
+    this.lastBackupOn = const Value.absent(),
   });
   SettingsRowsCompanion.insert({
     this.id = const Value.absent(),
@@ -615,6 +659,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     this.appLockEnabled = const Value.absent(),
     required OverspendStrategy overspendStrategy,
     this.onboarded = const Value.absent(),
+    this.lastBackupOn = const Value.absent(),
   }) : currency = Value(currency),
        payFrequency = Value(payFrequency),
        nextPayday = Value(nextPayday),
@@ -634,6 +679,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Expression<bool>? appLockEnabled,
     Expression<String>? overspendStrategy,
     Expression<bool>? onboarded,
+    Expression<String>? lastBackupOn,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -648,6 +694,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       if (appLockEnabled != null) 'app_lock_enabled': appLockEnabled,
       if (overspendStrategy != null) 'overspend_strategy': overspendStrategy,
       if (onboarded != null) 'onboarded': onboarded,
+      if (lastBackupOn != null) 'last_backup_on': lastBackupOn,
     });
   }
 
@@ -664,6 +711,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Value<bool>? appLockEnabled,
     Value<OverspendStrategy>? overspendStrategy,
     Value<bool>? onboarded,
+    Value<LocalDate?>? lastBackupOn,
   }) {
     return SettingsRowsCompanion(
       id: id ?? this.id,
@@ -678,6 +726,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       appLockEnabled: appLockEnabled ?? this.appLockEnabled,
       overspendStrategy: overspendStrategy ?? this.overspendStrategy,
       onboarded: onboarded ?? this.onboarded,
+      lastBackupOn: lastBackupOn ?? this.lastBackupOn,
     );
   }
 
@@ -734,6 +783,11 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     if (onboarded.present) {
       map['onboarded'] = Variable<bool>(onboarded.value);
     }
+    if (lastBackupOn.present) {
+      map['last_backup_on'] = Variable<String>(
+        $SettingsRowsTable.$converterlastBackupOnn.toSql(lastBackupOn.value),
+      );
+    }
     return map;
   }
 
@@ -751,7 +805,8 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
           ..write('theme: $theme, ')
           ..write('appLockEnabled: $appLockEnabled, ')
           ..write('overspendStrategy: $overspendStrategy, ')
-          ..write('onboarded: $onboarded')
+          ..write('onboarded: $onboarded, ')
+          ..write('lastBackupOn: $lastBackupOn')
           ..write(')'))
         .toString();
   }
@@ -4957,6 +5012,7 @@ typedef $$SettingsRowsTableCreateCompanionBuilder =
       Value<bool> appLockEnabled,
       required OverspendStrategy overspendStrategy,
       Value<bool> onboarded,
+      Value<LocalDate?> lastBackupOn,
     });
 typedef $$SettingsRowsTableUpdateCompanionBuilder =
     SettingsRowsCompanion Function({
@@ -4972,6 +5028,7 @@ typedef $$SettingsRowsTableUpdateCompanionBuilder =
       Value<bool> appLockEnabled,
       Value<OverspendStrategy> overspendStrategy,
       Value<bool> onboarded,
+      Value<LocalDate?> lastBackupOn,
     });
 
 class $$SettingsRowsTableFilterComposer
@@ -5048,6 +5105,12 @@ class $$SettingsRowsTableFilterComposer
     column: $table.onboarded,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnWithTypeConverterFilters<LocalDate?, LocalDate, String>
+  get lastBackupOn => $composableBuilder(
+    column: $table.lastBackupOn,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
 }
 
 class $$SettingsRowsTableOrderingComposer
@@ -5118,6 +5181,11 @@ class $$SettingsRowsTableOrderingComposer
     column: $table.onboarded,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get lastBackupOn => $composableBuilder(
+    column: $table.lastBackupOn,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SettingsRowsTableAnnotationComposer
@@ -5184,6 +5252,12 @@ class $$SettingsRowsTableAnnotationComposer
 
   GeneratedColumn<bool> get onboarded =>
       $composableBuilder(column: $table.onboarded, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LocalDate?, String> get lastBackupOn =>
+      $composableBuilder(
+        column: $table.lastBackupOn,
+        builder: (column) => column,
+      );
 }
 
 class $$SettingsRowsTableTableManager
@@ -5230,6 +5304,7 @@ class $$SettingsRowsTableTableManager
                 Value<OverspendStrategy> overspendStrategy =
                     const Value.absent(),
                 Value<bool> onboarded = const Value.absent(),
+                Value<LocalDate?> lastBackupOn = const Value.absent(),
               }) => SettingsRowsCompanion(
                 id: id,
                 currency: currency,
@@ -5243,6 +5318,7 @@ class $$SettingsRowsTableTableManager
                 appLockEnabled: appLockEnabled,
                 overspendStrategy: overspendStrategy,
                 onboarded: onboarded,
+                lastBackupOn: lastBackupOn,
               ),
           createCompanionCallback:
               ({
@@ -5258,6 +5334,7 @@ class $$SettingsRowsTableTableManager
                 Value<bool> appLockEnabled = const Value.absent(),
                 required OverspendStrategy overspendStrategy,
                 Value<bool> onboarded = const Value.absent(),
+                Value<LocalDate?> lastBackupOn = const Value.absent(),
               }) => SettingsRowsCompanion.insert(
                 id: id,
                 currency: currency,
@@ -5271,6 +5348,7 @@ class $$SettingsRowsTableTableManager
                 appLockEnabled: appLockEnabled,
                 overspendStrategy: overspendStrategy,
                 onboarded: onboarded,
+                lastBackupOn: lastBackupOn,
               ),
           withReferenceMapper: (p0) => p0
               .map(

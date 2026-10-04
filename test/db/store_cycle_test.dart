@@ -223,5 +223,27 @@ void main() {
         ); // not this week
       },
     );
+
+    test(
+      'a Vault upgraded from an older version starts releasing next Monday',
+      () async {
+        await (await launch()).flush(); // an existing install
+        // As migrated from schema v1: active, but no release date yet.
+        await repo.saveVault(
+          const Vault(openingBalanceCents: 300000, steadyPayWeeklyCents: 50000),
+        );
+        var store = await launch();
+        expect(store.vault.lastReleaseDate, mondayOnOrBefore(now));
+        expect(store.entries.where((e) => e.fromVault), isEmpty);
+
+        store = await restart(store);
+        now = mondayAfter(now);
+        store.onClockTick();
+        expect(
+          store.entries.where((e) => e.fromVault).map((e) => e.localDate),
+          [now],
+        );
+      },
+    );
   });
 }

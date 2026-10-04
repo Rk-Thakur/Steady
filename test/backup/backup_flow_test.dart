@@ -1,0 +1,165 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:steady/core/local_date.dart';
+import 'package:steady/data/budget_store.dart';
+import 'package:steady/domain/models/models.dart';
+import 'package:steady/main.dart';
+import 'package:steady/ui/routes.dart';
+import 'package:steady/ui/settings/backup_flows.dart';
+
+/// Stands in for the system Save / Open dialogs.
+class _FakeFileIo implements BackupFileIo {
+  final saved = <String, Uint8List>{};
+  Uint8List? toPick;
+
+  @override
+  Future<bool> save({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    saved[fileName] = bytes;
+    return true;
+  }
+
+  @override
+  Future<Uint8List?> pick() async => toPick;
+}
+
+void main() {
+  const oct2 = LocalDate(2026, 10, 2);
+  late _FakeFileIo io;
+
+  setUp(() => BackupFileIo.instance = io = _FakeFileIo());
+
+  Future<BudgetStore> openBackupScreen(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final store = BudgetStore.sample(clock: () => oct2);
+    await tester.pumpWidget(SteadyApp(store: store, initialRoute: Routes.home));
+    await tester.pumpAndSettle();
+    tester
+        .state<NavigatorState>(find.byType(Navigator).first)
+        .pushNamed(Routes.backup);
+    await tester.pumpAndSettle();
+    return store;
+  }
+
+  /// Lets the encryption isolate finish (real time), then redraws.
+  Future<void> letCryptoRun(WidgetTester tester) async {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 2)),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('create a backup, then restore it over changed data', (
+    tester,
+  ) async {
+    final store = await openBackupScreen(tester);
+    expect(find.text('No backup file yet'), findsOneWidget);
+
+    // Create: password twice, then the (fake) Save sheet receives the file.
+    await tester.tap(find.text('Create backup file'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'correct horse');
+    await tester.enterText(fields.at(1), 'correct horse');
+    await tester.pump();
+    await tester.tap(find.text('Create backup file').last);
+    await letCryptoRun(tester);
+
+    expect(io.saved.keys, ['steady-backup-2026-10-02.steady']);
+    expect(store.settings.lastBackupOn, oct2);
+    expect(
+      find.textContaining('Last backup file: Fri, Oct 2', skipOffstage: false),
+      findsOneWidget,
+    );
+
+    // Change something after the backup.
+    store.addEntry(
+      Entry(
+        id: 'after',
+        type: EntryType.spend,
+        amountCents: 1000,
+        localDate: oct2,
+        createdAtUtc: DateTime.utc(2026),
+        timeZoneId: 'UTC',
+        merchant: 'After backup',
+      ),
+    );
+
+    // Restore: confirm, pick the file, wrong password first, then the right one.
+    io.toPick = io.saved.values.single;
+    await tester.ensureVisible(find.text('Restore from backup file'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Restore from backup file'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose a .steady file'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).last, 'wrong password');
+    await tester.pump();
+    await tester.tap(find.text('Unlock'));
+    await letCryptoRun(tester);
+    expect(
+      find.text(
+        "That password doesn't open this file. Check it and try again.",
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(find.byType(TextField).last, 'correct horse');
+    await tester.pump();
+    await tester.tap(find.text('Unlock'));
+    await letCryptoRun(tester);
+
+    // The preview names the backup's real creation date and what's in it.
+    expect(find.textContaining('Backup from'), findsOneWidget);
+    expect(find.textContaining('9 bills, 3 goals'), findsOneWidget);
+    await tester.tap(find.text('Replace everything'));
+    await letCryptoRun(tester);
+
+    expect(store.entries.any((e) => e.id == 'after'), isFalse);
+    expect(store.dailyNumber.safeToSpendCents, 4620);
+    expect(
+      find.text('Backup restored. Your daily number is up to date.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a mismatched password can\'t create a backup', (tester) async {
+    await openBackupScreen(tester);
+    await tester.tap(find.text('Create backup file'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'correct horse');
+    await tester.enterText(fields.at(1), 'correct house');
+    await tester.pump();
+    expect(find.text("Passwords don't match."), findsOneWidget);
+    await tester.tap(find.text('Create backup file').last);
+    await tester.pump();
+    expect(io.saved, isEmpty);
+  });
+
+  testWidgets('export CSV hands a spreadsheet to the Save sheet', (
+    tester,
+  ) async {
+    await openBackupScreen(tester);
+    await tester.tap(find.text('Export spreadsheet (CSV)'));
+    await tester.pumpAndSettle();
+    final csv = io.saved['steady-entries-2026-10-02.csv']!;
+    expect(csv.sublist(0, 3), [0xEF, 0xBB, 0xBF]); // UTF-8 BOM for Excel
+    expect(
+      String.fromCharCodes(csv.sublist(3, 20)),
+      startsWith('Date,Type,Amount'),
+    );
+    expect(
+      find.text('Saved steady-entries-2026-10-02.csv.', skipOffstage: false),
+      findsOneWidget,
+    );
+  });
+}

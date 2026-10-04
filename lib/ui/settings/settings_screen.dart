@@ -134,6 +134,9 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.lock_outline_rounded,
               tone: BannerTone.info,
               label: 'Backup & export',
+              value: s.lastBackupOn == null
+                  ? 'No backup yet'
+                  : 'File: ${formatShortDate(s.lastBackupOn!)}',
               onTap: () => go(Routes.backup),
             ),
           ],

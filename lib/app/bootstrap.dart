@@ -12,6 +12,7 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../ui/onboarding/onboarding_screens.dart';
 import '../ui/routes.dart';
+import '../ui/settings/backup_flows.dart';
 import '../ui/widgets/kit.dart';
 
 /// Opens the encrypted database, then starts the app.
@@ -83,6 +84,16 @@ class _SteadyBootstrapState extends State<SteadyBootstrap> {
     }
   }
 
+  /// Restore after a lost key: a fresh database (new key), then the backup.
+  Future<void> _restoreInto(BudgetSnapshot snapshot) async {
+    await resetSteadyDatabase();
+    await SecureKeyVault.pin().delete();
+    final repo = BudgetRepository(await openSteadyDatabase());
+    await repo.replaceAll(snapshot);
+    await repo.close();
+    await _start();
+  }
+
   Future<void> _startOver() async {
     await resetSteadyDatabase();
     await SecureKeyVault.pin().delete();
@@ -105,7 +116,10 @@ class _SteadyBootstrapState extends State<SteadyBootstrap> {
       darkTheme: AppTheme.dark(),
       home: switch (_phase) {
         _Phase.loading || _Phase.ready => const SplashScreen.loading(),
-        _Phase.keyLost => _RecoveryScreen(onStartOver: _startOver),
+        _Phase.keyLost => _RecoveryScreen(
+          onStartOver: _startOver,
+          onRestore: _restoreInto,
+        ),
         _Phase.failed => _FailedScreen(error: _error, onRetry: _start),
       },
     );
@@ -115,8 +129,9 @@ class _SteadyBootstrapState extends State<SteadyBootstrap> {
 /// The database exists but its key is gone (e.g. app data restored onto a new
 /// phone; the key never leaves the old one).
 class _RecoveryScreen extends StatelessWidget {
-  const _RecoveryScreen({required this.onStartOver});
+  const _RecoveryScreen({required this.onStartOver, required this.onRestore});
   final Future<void> Function() onStartOver;
+  final Future<void> Function(BudgetSnapshot snapshot) onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -126,8 +141,10 @@ class _RecoveryScreen extends StatelessWidget {
       bottom: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Restoring a .steady file arrives with backup & export.
-          const SteadyButton('Restore from a backup file', onPressed: null),
+          SteadyButton(
+            'Restore from a backup file',
+            onPressed: () => restoreFlow(context, apply: onRestore),
+          ),
           const SizedBox(height: 10),
           SteadyButton(
             'Start over',

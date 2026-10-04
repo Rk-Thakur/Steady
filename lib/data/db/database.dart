@@ -39,7 +39,7 @@ class SteadyDatabase extends _$SteadyDatabase {
   SteadyDatabase(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -69,6 +69,12 @@ class SteadyDatabase extends _$SteadyDatabase {
         await m.addColumn(schema.entries, schema.entries.fromVault);
         await m.addColumn(schema.entries, schema.entries.billId);
         await m.addColumn(schema.vaults, schema.vaults.lastReleaseDate);
+      },
+      from2To3: (m, schema) async {
+        await m.addColumn(
+          schema.settingsRows,
+          schema.settingsRows.lastBackupOn,
+        );
       },
     ),
     beforeOpen: (details) async {
@@ -105,6 +111,10 @@ class SettingsRows extends Table {
       boolean().withDefault(const Constant(false))();
   TextColumn get overspendStrategy => textEnum<OverspendStrategy>()();
   BoolColumn get onboarded => boolean().withDefault(const Constant(false))();
+
+  /// v3: when the user last created a .steady backup file.
+  TextColumn get lastBackupOn =>
+      text().map(const LocalDateConverter()).nullable()();
 
   @override
   Set<Column> get primaryKey => {id};

@@ -53,6 +53,7 @@ class AppSettings {
     this.theme = ThemePreference.system,
     this.appLockEnabled = false,
     this.pin,
+    this.lastBackupOn,
     this.overspendStrategy = OverspendStrategy.spreadEvenly,
     this.onboarded = true,
   });
@@ -74,6 +75,9 @@ class AppSettings {
   /// App lock PIN. Kept in memory for now; moves to the Keychain / Keystore
   /// with the encrypted database.
   final String? pin;
+
+  /// When the user last created a backup file.
+  final LocalDate? lastBackupOn;
   final OverspendStrategy overspendStrategy;
   final bool onboarded;
 
@@ -90,6 +94,7 @@ class AppSettings {
     ThemePreference? theme,
     bool? appLockEnabled,
     String? Function()? pin,
+    LocalDate? Function()? lastBackupOn,
     OverspendStrategy? overspendStrategy,
     bool? onboarded,
   }) {
@@ -106,6 +111,7 @@ class AppSettings {
       theme: theme ?? this.theme,
       appLockEnabled: appLockEnabled ?? this.appLockEnabled,
       pin: pin != null ? pin() : this.pin,
+      lastBackupOn: lastBackupOn != null ? lastBackupOn() : this.lastBackupOn,
       overspendStrategy: overspendStrategy ?? this.overspendStrategy,
       onboarded: onboarded ?? this.onboarded,
     );

@@ -138,6 +138,7 @@ class BudgetRepository {
           appLockEnabled: Value(s.appLockEnabled),
           overspendStrategy: s.overspendStrategy,
           onboarded: Value(s.onboarded),
+          lastBackupOn: Value(s.lastBackupOn),
         ),
       );
 
@@ -353,6 +354,7 @@ class BudgetRepository {
     appLockEnabled: r.appLockEnabled,
     overspendStrategy: r.overspendStrategy,
     onboarded: r.onboarded,
+    lastBackupOn: r.lastBackupOn,
   );
 
   static BudgetCategory _categoryFrom(CategoryRow r) => BudgetCategory(

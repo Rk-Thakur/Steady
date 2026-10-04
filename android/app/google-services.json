@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "238955357529",
+    "project_id": "steady-fe050",
+    "storage_bucket": "steady-fe050.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:238955357529:android:eee632ebd45ee3f32a1848",
+        "android_client_info": {
+          "package_name": "com.example.steady"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyd4zbBT13l3XJ1yOhJMLDLL1M-yBZ3NQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
