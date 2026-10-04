@@ -46,3 +46,24 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Signing & secrets — never commit (backed up privately instead).
+# Android upload key config (also ignored in android/.gitignore) and keystores.
+key.properties
+**/key.properties
+*.jks
+*.keystore
+# Apple signing: certificates, provisioning profiles, App Store Connect API keys.
+*.p12
+*.cer
+*.mobileprovision
+*.p8
+AuthKey_*.p8
+# Firebase project config (only App Distribution is used; the app has no SDK).
+google-services.json
+GoogleService-Info.plist
+lib/firebase_options.dart
+firebase-debug.log
+# Local environment files.
+.env
+.env.*
