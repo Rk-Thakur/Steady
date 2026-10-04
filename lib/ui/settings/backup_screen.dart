@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/notifications.dart';
 import '../../core/date_format.dart';
 import '../../data/store_scope.dart';
 import '../../theme/tokens.dart';
@@ -16,7 +17,6 @@ class BackupScreen extends StatefulWidget {
 }
 
 class _BackupScreenState extends State<BackupScreen> {
-  bool _monthly = true;
   String? _toast;
 
   void _show(String? message) {
@@ -142,8 +142,17 @@ class _BackupScreenState extends State<BackupScreen> {
               SwitchRow(
                 title: 'Monthly reminder',
                 subtitle: 'A local notification on the 1st',
-                value: _monthly,
-                onChanged: (v) => setState(() => _monthly = v),
+                value: store.settings.reminders.backupMonthly,
+                onChanged: (v) {
+                  store.updateSettings(
+                    store.settings.copyWith(
+                      reminders: store.settings.reminders.copyWith(
+                        backupMonthly: v,
+                      ),
+                    ),
+                  );
+                  if (v) Notifications.instance.requestPermission();
+                },
               ),
             ],
           ),

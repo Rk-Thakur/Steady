@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/notifications.dart';
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
 import '../../core/money.dart';
@@ -842,10 +843,22 @@ class NotifPermissionScreen extends StatelessWidget {
     final store = StoreScope.of(context);
     final c = context.colors;
 
-    void finish() {
-      // Requesting the OS notification permission is not wired yet.
-      store.updateSettings(store.settings.copyWith(onboarded: true));
+    void finish({required bool reminders}) {
+      store.updateSettings(
+        store.settings.copyWith(
+          onboarded: true,
+          // "Not now": nothing is scheduled until turned on in Settings.
+          reminders: reminders ? null : ReminderSettings.off,
+        ),
+      );
       Navigator.of(context).pushNamedAndRemoveUntil(Routes.home, (_) => false);
+    }
+
+    Future<void> allow() async {
+      // The OS asks the user; reminders stay on either way, and the
+      // Reminders screen explains how to allow them later if declined.
+      await Notifications.instance.requestPermission();
+      finish(reminders: true);
     }
 
     Widget preview(String time, String title, String body) => Container(
@@ -947,13 +960,13 @@ class NotifPermissionScreen extends StatelessWidget {
       bottom: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SteadyButton('Allow reminders', onPressed: finish),
+          SteadyButton('Allow reminders', onPressed: allow),
           const SizedBox(height: 10),
           SteadyButton(
             'Not now',
             kind: ButtonKind.link,
             height: 48,
-            onPressed: finish,
+            onPressed: () => finish(reminders: false),
           ),
         ],
       ),

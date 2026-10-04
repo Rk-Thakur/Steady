@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../core/local_date.dart';
+import '../domain/reminders.dart';
 import '../domain/cycle.dart';
 import '../domain/daily_number.dart';
 import '../domain/models/models.dart';
@@ -29,6 +30,7 @@ class BudgetStore extends ChangeNotifier {
     this._split,
     List<SharedExpense> sharedExpenses = const [],
     Map<LocalDate, OverspendStrategy> overspendDecisions = const {},
+    Map<LocalDate, int> dailyNumbers = const {},
     LocalDate Function()? clock,
     BudgetRepository? repository,
     this._pinVault,
@@ -38,6 +40,7 @@ class BudgetStore extends ChangeNotifier {
        _goals = List.of(goals),
        _shared = List.of(sharedExpenses),
        _overspendHandled = Map.of(overspendDecisions),
+       _dailyNumbers = Map.of(dailyNumbers),
        _clock = clock ?? LocalDate.today,
        _repo = repository;
 
@@ -70,6 +73,7 @@ class BudgetStore extends ChangeNotifier {
       split: s.split,
       sharedExpenses: s.sharedExpenses,
       overspendDecisions: s.overspendDecisions,
+      dailyNumbers: s.dailyNumbers,
       clock: clock,
       repository: repository,
       pinVault: pinVault,
@@ -77,6 +81,7 @@ class BudgetStore extends ChangeNotifier {
     if (snapshot.isFresh) store._save((r) => r.replaceAll(store.toSnapshot()));
     // Catch up on Vault releases and automatic cycles since the last launch.
     store.refreshDay();
+    store._recordDailyNumber();
     return store;
   }
 
@@ -135,6 +140,7 @@ class BudgetStore extends ChangeNotifier {
 
   /// How each day's overspend was handled (S4), by local date.
   final Map<LocalDate, OverspendStrategy> _overspendHandled;
+  final Map<LocalDate, int> _dailyNumbers;
   final LocalDate Function() _clock;
   final BudgetRepository? _repo;
   final KeyVault? _pinVault;
@@ -232,6 +238,23 @@ class BudgetStore extends ChangeNotifier {
       bills: _bills,
     ),
   );
+
+  /// Reminders to schedule from [now] (local time), from current settings
+  /// and data. Today comes from the store's clock.
+  List<PlannedNotification> plannedNotifications(DateTime now) =>
+      planNotifications(
+        now: DateTime(
+          today.year,
+          today.month,
+          today.day,
+          now.hour,
+          now.minute,
+          now.second,
+        ),
+        settings: _settings,
+        bills: _bills,
+        loggedToday: _entries.any((e) => e.localDate == today),
+      );
 
   /// Today's entries, newest first.
   List<Entry> get todayEntries {
@@ -348,7 +371,27 @@ class BudgetStore extends ChangeNotifier {
     split: _split,
     sharedExpenses: List.of(_shared),
     overspendDecisions: Map.of(_overspendHandled),
+    dailyNumbers: Map.of(_dailyNumbers),
   );
+
+  /// Each day's number as last shown, including today's (summaries).
+  Map<LocalDate, int> get dailyNumbers => Map.unmodifiable(_dailyNumbers);
+
+  /// Every change can move today's number, so record it on each redraw.
+  @override
+  void notifyListeners() {
+    _recordDailyNumber();
+    super.notifyListeners();
+  }
+
+  void _recordDailyNumber() {
+    if (!_settings.onboarded) return;
+    final day = today;
+    final cents = dailyNumber.dailyAllowanceCents;
+    if (_dailyNumbers[day] == cents) return;
+    _dailyNumbers[day] = cents;
+    _save((r) => r.saveDailyNumber(day, cents));
+  }
 
   // ─── Writes ──────────────────────────────────────────────────────────────
 
@@ -708,6 +751,9 @@ class BudgetStore extends ChangeNotifier {
     _overspendHandled
       ..clear()
       ..addAll(s.overspendDecisions);
+    _dailyNumbers
+      ..clear()
+      ..addAll(s.dailyNumbers);
     notifyListeners();
   }
 
@@ -957,6 +1003,8 @@ class BudgetStore extends ChangeNotifier {
           paidByYou: false,
         ),
       ],
+      // Two weeks of the design's $64 number, so summaries have history.
+      dailyNumbers: {for (var d = 1; d <= 14; d++) today.addDays(-d): 6400},
     );
   }
 }

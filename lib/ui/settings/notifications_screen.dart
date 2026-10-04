@@ -1,115 +1,99 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/tokens.dart';
+import '../../core/date_format.dart';
+import '../../core/local_date.dart';
 import '../../data/store_scope.dart';
+import '../../domain/reminders.dart';
+import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../shell/home_shell.dart';
 import '../widgets/kit.dart';
 
-/// N1 Notifications. Demo list from the design until local notifications
-/// are scheduled and stored.
+/// N1 Notifications: what Steady will remind you about next, planned on
+/// this phone from your bills, payday and Reminders settings.
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
+  static const _shown = 12;
+
   @override
   Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final c = context.colors;
+    final plan = store.plannedNotifications(DateTime.now()).take(_shown);
+    final today = store.today;
+    String dayLabel(LocalDate d) => d == today
+        ? 'Today'
+        : d == today.addDays(1)
+        ? 'Tomorrow'
+        : formatShortDay(d);
+
+    final byDay = <LocalDate, List<PlannedNotification>>{};
+    for (final n in plan) {
+      byDay.putIfAbsent(LocalDate.fromDateTime(n.at), () => []).add(n);
+    }
+
     return SteadyPage(
       title: 'Notifications',
+      subtitle: 'Coming up',
       gap: 14,
       trailing: LinkText(
         'Settings',
         onTap: () => Navigator.of(context).pushNamed(Routes.reminders),
       ),
-      children: const [
-        Overline('Today'),
-        GroupedList(
-          children: [
-            _Item(
-              Icons.payments_outlined,
-              BannerTone.primary,
-              'Did you get paid?',
-              'A client payment was expected this week.',
-              '7:00 AM',
-              Routes.paidPrompt,
-              unread: true,
-            ),
-            _Item(
-              Icons.priority_high_rounded,
-              BannerTone.danger,
-              "You went over today's number",
-              'By \$12.40. See two easy ways to fix it.',
-              '9:48 PM',
-              Routes.home,
-              unread: true,
-            ),
-            _Item(
-              Icons.trending_up_rounded,
-              BannerTone.warning,
-              'Streamly price went up',
-              'Now \$17.99/mo. Keep it or set a cancel reminder.',
-              '9:05 AM',
-              Routes.bills,
-              unread: true,
-            ),
-            _Item(
-              Icons.edit_note_rounded,
-              BannerTone.info,
-              'Time to log yesterday?',
-              'Nothing logged on Thursday.',
-              '8:30 AM',
-              Routes.todayCatchUp,
-              unread: true,
-            ),
-          ],
-        ),
-        Overline('Earlier'),
-        GroupedList(
-          children: [
-            _Item(
-              Icons.event_outlined,
-              BannerTone.primary,
-              'Car insurance due in 2 days',
-              '\$128.00 on Oct 8 · already set aside',
-              'Yesterday',
-              Routes.bills,
-            ),
-            _Item(
-              Icons.flag_outlined,
-              BannerTone.primary,
-              'Halfway there!',
-              'Emergency fund passed 50%.',
-              'Sep 30',
-              Routes.goalDetail,
-            ),
-            _Item(
-              Icons.people_outline_rounded,
-              BannerTone.warning,
-              'Split balance: \$64.50',
-              'Alex owes you. Record it when you settle.',
-              'Sep 29',
-              Routes.settleUp,
-            ),
-            _Item(
-              Icons.bar_chart_rounded,
-              BannerTone.neutral,
-              'Your weekly recap',
-              'In \$820 · spent \$412.60 · saved \$236.80',
-              'Sep 27',
-              Routes.summaryWeek,
-            ),
-            _Item(
-              Icons.calendar_month_outlined,
-              BannerTone.neutral,
-              'Your September recap',
-              'Tired was your top spending trigger.',
-              'Oct 1',
-              Routes.summaryMonth,
-            ),
-          ],
+      children: [
+        if (byDay.isEmpty)
+          Text(
+            store.settings.reminders.anyOn
+                ? 'Nothing coming up in the next two weeks.'
+                : 'All reminders are off. Turn them on in Settings.',
+            style: SteadyType.body.copyWith(color: c.muted),
+          ),
+        for (final day in byDay.entries) ...[
+          Overline(dayLabel(day.key)),
+          GroupedList(
+            children: [
+              for (final n in day.value)
+                _Item(
+                  _icon(n.kind),
+                  _tone(n.kind),
+                  n.title,
+                  n.body,
+                  formatTime(n.at),
+                  n.route,
+                ),
+            ],
+          ),
+        ],
+        Text(
+          'Reminders are scheduled on this phone. Nothing comes from a server.',
+          textAlign: TextAlign.center,
+          style: SteadyType.caption.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: c.muted,
+          ),
         ),
       ],
     );
   }
+
+  static IconData _icon(ReminderKind kind) => switch (kind) {
+    ReminderKind.logSpends => Icons.edit_note_rounded,
+    ReminderKind.payday => Icons.payments_outlined,
+    ReminderKind.billDue => Icons.event_outlined,
+    ReminderKind.latePause => Icons.nightlight_outlined,
+    ReminderKind.weeklyRecap => Icons.bar_chart_rounded,
+    ReminderKind.monthlyRecap => Icons.calendar_month_outlined,
+    ReminderKind.backup => Icons.save_alt_rounded,
+  };
+
+  static BannerTone _tone(ReminderKind kind) => switch (kind) {
+    ReminderKind.logSpends => BannerTone.info,
+    ReminderKind.payday || ReminderKind.billDue => BannerTone.primary,
+    ReminderKind.latePause || ReminderKind.backup => BannerTone.warning,
+    ReminderKind.weeklyRecap || ReminderKind.monthlyRecap => BannerTone.neutral,
+  };
 }
 
 class _Item extends StatelessWidget {
@@ -119,16 +103,14 @@ class _Item extends StatelessWidget {
     this.title,
     this.body,
     this.time,
-    this.route, {
-    this.unread = false,
-  });
+    this.route,
+  );
   final IconData icon;
   final BannerTone tone;
   final String title;
   final String body;
   final String time;
   final String route;
-  final bool unread;
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +139,7 @@ class _Item extends StatelessWidget {
                   Text(
                     title,
                     style: SteadyType.body.copyWith(
-                      fontWeight: unread ? FontWeight.w800 : FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                       height: 1.3,
                     ),
                   ),
@@ -179,22 +161,6 @@ class _Item extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-            SizedBox(
-              width: 8,
-              child: unread
-                  ? Semantics(
-                      label: 'Unread',
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: c.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    )
-                  : null,
             ),
           ],
         ),

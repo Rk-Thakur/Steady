@@ -23,6 +23,7 @@ class Goal {
     this.kind = GoalKind.thing,
     this.targetDate,
     this.paused = false,
+    this.createdOn,
   });
 
   final String id;
@@ -35,6 +36,10 @@ class Goal {
   final int dailySetAsideCents;
   final LocalDate? targetDate;
   final bool paused;
+
+  /// When the goal was started. Null for goals from before this was tracked
+  /// (schema v3), which count as always existing.
+  final LocalDate? createdOn;
 
   bool get isReached => savedCents >= targetCents;
   double get progress =>
@@ -59,6 +64,7 @@ class Goal {
       dailySetAsideCents: dailySetAsideCents ?? this.dailySetAsideCents,
       targetDate: targetDate,
       paused: paused ?? this.paused,
+      createdOn: createdOn,
     );
   }
 }

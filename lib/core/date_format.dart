@@ -69,3 +69,6 @@ String formatTime(DateTime local) {
   final m = local.minute.toString().padLeft(2, '0');
   return '$h:$m ${local.hour < 12 ? 'AM' : 'PM'}';
 }
+
+/// "Thursday" for [DateTime.thursday].
+String weekdayName(int weekday) => _weekdays[weekday - 1];

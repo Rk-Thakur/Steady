@@ -33,13 +33,14 @@ part 'database.g.dart';
     Splits,
     SharedExpenses,
     OverspendDecisions,
+    DailyNumbers,
   ],
 )
 class SteadyDatabase extends _$SteadyDatabase {
   SteadyDatabase(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -75,6 +76,31 @@ class SteadyDatabase extends _$SteadyDatabase {
           schema.settingsRows,
           schema.settingsRows.lastBackupOn,
         );
+      },
+      from3To4: (m, schema) async {
+        await m.createTable(schema.dailyNumbers);
+        await m.addColumn(schema.goals, schema.goals.createdOn);
+      },
+      from4To5: (m, schema) async {
+        // Development builds briefly had a v4 without goals.created_on.
+        final goalColumns = await customSelect(
+          'PRAGMA table_info(goals)',
+        ).map((r) => r.read<String>('name')).get();
+        if (!goalColumns.contains('created_on')) {
+          await m.addColumn(schema.goals, schema.goals.createdOn);
+        }
+        final s = schema.settingsRows;
+        for (final column in [
+          s.remindLogSpends,
+          s.remindLogAt,
+          s.remindBills,
+          s.remindLatePause,
+          s.remindRecaps,
+          s.remindBackup,
+          s.quietFrom,
+        ]) {
+          await m.addColumn(s, column);
+        }
       },
     ),
     beforeOpen: (details) async {
@@ -115,6 +141,17 @@ class SettingsRows extends Table {
   /// v3: when the user last created a .steady backup file.
   TextColumn get lastBackupOn =>
       text().map(const LocalDateConverter()).nullable()();
+
+  /// v5: Reminders (see ReminderSettings for meanings and defaults).
+  BoolColumn get remindLogSpends =>
+      boolean().withDefault(const Constant(true))();
+  IntColumn get remindLogAt => integer().withDefault(const Constant(1230))();
+  BoolColumn get remindBills => boolean().withDefault(const Constant(true))();
+  BoolColumn get remindLatePause =>
+      boolean().withDefault(const Constant(true))();
+  BoolColumn get remindRecaps => boolean().withDefault(const Constant(false))();
+  BoolColumn get remindBackup => boolean().withDefault(const Constant(true))();
+  IntColumn get quietFrom => integer().withDefault(const Constant(1380))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -243,6 +280,8 @@ class Goals extends Table {
       text().map(const LocalDateConverter()).nullable()();
   BoolColumn get paused => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  TextColumn get createdOn =>
+      text().map(const LocalDateConverter()).nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -265,6 +304,18 @@ class SharedExpenses extends Table {
 class OverspendDecisions extends Table {
   TextColumn get localDate => text().map(const LocalDateConverter())();
   TextColumn get strategy => textEnum<OverspendStrategy>()();
+
+  @override
+  Set<Column> get primaryKey => {localDate};
+}
+
+/// Each day's number as last shown, for "Days under your number" in the
+/// summaries. Past numbers can't be recomputed (bills and plans move on), so
+/// they are recorded as they happen.
+@DataClassName('DailyNumberRow')
+class DailyNumbers extends Table {
+  TextColumn get localDate => text().map(const LocalDateConverter())();
+  IntColumn get allowanceCents => integer()();
 
   @override
   Set<Column> get primaryKey => {localDate};

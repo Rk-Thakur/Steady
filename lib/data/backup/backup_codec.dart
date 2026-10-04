@@ -59,6 +59,9 @@ abstract final class BackupCodec {
     'overspendDecisions': {
       for (final d in s.overspendDecisions.entries) d.key.toIso(): d.value.name,
     },
+    'dailyNumbers': {
+      for (final d in s.dailyNumbers.entries) d.key.toIso(): d.value,
+    },
   };
 
   /// Throws [FormatException] if anything is missing or malformed.
@@ -126,6 +129,14 @@ abstract final class BackupCodec {
               d.value! as String,
             ),
         },
+        // Absent in backups made before Stage 7.
+        dailyNumbers: {
+          for (final d
+              in ((j['dailyNumbers'] ?? const <String, Object?>{})
+                      as Map<String, Object?>)
+                  .entries)
+            LocalDate.parse(d.key): d.value! as int,
+        },
       );
     } on FormatException {
       rethrow;
@@ -149,6 +160,15 @@ abstract final class BackupCodec {
     'overspendStrategy': s.overspendStrategy.name,
     'onboarded': s.onboarded,
     'lastBackupOn': s.lastBackupOn?.toIso(),
+    'reminders': {
+      'logSpends': s.reminders.logSpends,
+      'logAtMinutes': s.reminders.logAtMinutes,
+      'billsDue': s.reminders.billsDue,
+      'latePause': s.reminders.latePause,
+      'recaps': s.reminders.recaps,
+      'backupMonthly': s.reminders.backupMonthly,
+      'quietFromMinutes': s.reminders.quietFromMinutes,
+    },
   };
 
   // App lock is never restored: the PIN isn't in the file.
@@ -166,7 +186,23 @@ abstract final class BackupCodec {
     ),
     onboarded: s['onboarded']! as bool,
     lastBackupOn: _dateOrNull(s['lastBackupOn']),
+    reminders: _remindersFrom(s['reminders'] as Map<String, Object?>?),
   );
+
+  // Absent in backups made before Stage 7: the defaults apply.
+  static ReminderSettings _remindersFrom(Map<String, Object?>? r) {
+    const d = ReminderSettings();
+    if (r == null) return d;
+    return ReminderSettings(
+      logSpends: r['logSpends'] as bool? ?? d.logSpends,
+      logAtMinutes: r['logAtMinutes'] as int? ?? d.logAtMinutes,
+      billsDue: r['billsDue'] as bool? ?? d.billsDue,
+      latePause: r['latePause'] as bool? ?? d.latePause,
+      recaps: r['recaps'] as bool? ?? d.recaps,
+      backupMonthly: r['backupMonthly'] as bool? ?? d.backupMonthly,
+      quietFromMinutes: r['quietFromMinutes'] as int? ?? d.quietFromMinutes,
+    );
+  }
 
   static Map<String, Object?> _entry(Entry e) => {
     'id': e.id,
@@ -239,6 +275,7 @@ abstract final class BackupCodec {
     'dailySetAsideCents': g.dailySetAsideCents,
     'targetDate': g.targetDate?.toIso(),
     'paused': g.paused,
+    'createdOn': g.createdOn?.toIso(),
   };
 
   static Goal _goalFrom(Map<String, Object?> g) => Goal(
@@ -250,6 +287,7 @@ abstract final class BackupCodec {
     dailySetAsideCents: g['dailySetAsideCents']! as int,
     targetDate: _dateOrNull(g['targetDate']),
     paused: g['paused']! as bool,
+    createdOn: _dateOrNull(g['createdOn']),
   );
 
   static List<Map<String, Object?>> _list(Object? v) => [

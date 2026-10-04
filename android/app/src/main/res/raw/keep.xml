@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds strip resources referenced only from Dart; keep the
+     reminder icon (flutter_local_notifications looks it up by name). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_steady" />

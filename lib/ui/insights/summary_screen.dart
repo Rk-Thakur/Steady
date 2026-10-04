@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/date_format.dart';
 import '../../core/money.dart';
-import '../../data/demo_insights.dart';
 import '../../data/store_scope.dart';
+import '../../domain/insights.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
@@ -23,13 +24,71 @@ class _SummaryScreenState extends State<SummaryScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final symbol = StoreScope.of(context).symbol;
-    final s = _month ? monthSummaryDemo : weekSummaryDemo;
+    final store = StoreScope.of(context);
+    final symbol = store.symbol;
     String m(int cents) => formatMoney(cents, symbol: symbol);
+    String whole(int cents) =>
+        formatMoney(cents, symbol: symbol, showCents: false);
+
+    final weekStartsOn = store.settings.weekStartsOn;
+    final period = summaryPeriodFor(
+      today: store.today,
+      isMonth: _month,
+      weekStartsOn: weekStartsOn,
+      entries: store.entries,
+    );
+    PeriodSummary summaryOf(Period p) => summarize(
+      period: p,
+      isMonth: _month,
+      today: store.today,
+      entries: store.entries,
+      categories: store.categories,
+      goals: store.goals,
+      dailyNumbers: store.dailyNumbers,
+      fallbackPaceCents: store.dailyNumber.dailyAllowanceCents,
+    );
+    final s = summaryOf(period);
+    final prev = summaryOf(period.previous);
+    final current = period.contains(store.today);
+    final vs = _month
+        ? 'vs ${formatMonthYear(prev.period.start).substring(0, 3)}'
+        : 'vs last week';
+
+    // "+$120 vs last week": green when the change is good for you.
+    _Note note(
+      int now,
+      int before, {
+      bool lowerIsBetter = false,
+      bool percent = false,
+    }) {
+      if (!prev.hasEntries) return _Note('Nothing to compare yet', c.muted);
+      final diff = now - before;
+      if (diff == 0) return _Note('Same as before', c.muted);
+      final text = percent && before > 0
+          ? '${diff > 0 ? '+' : '−'}${(diff.abs() * 100 / before).round()}% $vs'
+          : '${formatMoney(diff, symbol: symbol, showCents: false, signed: true)} $vs';
+      final good = lowerIsBetter ? diff < 0 : diff > 0;
+      return _Note(text, good ? c.positive : c.warningFg);
+    }
+
+    final inNote = note(s.inCents, prev.inCents);
+    final spentNote = note(
+      s.spentCents,
+      prev.spentCents,
+      lowerIsBetter: true,
+      percent: true,
+    );
+    final savedNote = note(s.savedCents, prev.savedCents);
+
+    final range = _month
+        ? '${formatMonthYear(period.start)}${current ? ' so far' : ''}'
+        : '${formatShortDay(period.start)} – '
+              '${current ? 'today' : formatShortDay(period.end)}';
+    final worthALook = _worthALook(s, whole);
 
     return SteadyPage(
-      title: s.title,
-      subtitle: s.range,
+      title: _month ? 'Monthly summary' : 'Weekly summary',
+      subtitle: range,
       gap: 14,
       children: [
         Segmented<bool>(
@@ -49,7 +108,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 child: _Stat(
                   label: 'Money in',
                   value: m(s.inCents),
-                  note: s.inNote,
+                  note: inNote,
                 ),
               ),
               const SizedBox(width: SteadySpace.s2),
@@ -57,7 +116,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 child: _Stat(
                   label: 'Spent',
                   value: m(s.spentCents),
-                  note: s.spentNote,
+                  note: spentNote,
                 ),
               ),
               const SizedBox(width: SteadySpace.s2),
@@ -65,7 +124,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 child: _Stat(
                   label: 'Saved',
                   value: m(s.savedCents),
-                  note: s.savedNote,
+                  note: savedNote,
                 ),
               ),
             ],
@@ -84,15 +143,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Negative when bills or spending were paid from money
+                    // that came in before this period: say so plainly.
                     Text(
-                      'Left over after spending & saving',
+                      s.leftOverCents < 0
+                          ? 'More went out than came in'
+                          : 'Left over after spending & saving',
                       style: SteadyType.caption.copyWith(color: c.onHeroMuted),
                     ),
                     Text(
-                      m(s.leftOverCents),
+                      m(s.leftOverCents.abs()),
                       style: SteadyType.title.copyWith(
                         fontSize: 30,
-                        color: c.highlight,
+                        color: s.leftOverCents < 0 ? c.onHero : c.highlight,
                       ),
                     ),
                   ],
@@ -109,7 +172,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     ),
                   ),
                   Text(
-                    s.daysUnder,
+                    s.daysCounted == 0
+                        ? '—'
+                        : '${s.daysUnder} of ${s.daysCounted}',
                     style: SteadyType.heading.copyWith(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -129,14 +194,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      s.chartTitle,
+                      _month ? 'Spending by week' : 'Spending by day',
                       style: SteadyType.body.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                   Text(
-                    '– – ${s.chartKey}',
+                    '– – ${whole(s.paceCents)} ${_month ? 'weekly pace' : 'daily number'}',
                     style: SteadyType.caption.copyWith(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -167,6 +232,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 style: SteadyType.body.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 10),
+              if (s.categories.isEmpty) _Empty('Nothing spent yet.'),
               for (final cat in s.categories)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
@@ -175,7 +241,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       SizedBox(
                         width: 96,
                         child: Text(
-                          cat.label,
+                          cat.name,
                           style: SteadyType.caption.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -228,25 +294,31 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   ),
                 ],
               ),
+              if (s.savings.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: _Empty('No goal set-asides in this period.'),
+                ),
               for (final sv in s.savings)
                 ValueRow(
                   padding: const EdgeInsets.only(top: 10),
-                  label: sv.label,
-                  labelWidget: NameMeta(name: sv.label, meta: sv.note ?? ''),
+                  label: sv.name,
+                  labelWidget: NameMeta(name: sv.name, meta: 'Daily set-aside'),
                   value: formatMoney(sv.cents, symbol: symbol, signed: true),
                   valueColor: c.positive,
                 ),
             ],
           ),
         ),
-        SoftBanner(
-          tone: BannerTone.warning,
-          child: LeadText(
-            lead: 'Worth a look.',
-            body: s.worthALook,
-            leadColor: c.warningFg,
+        if (worthALook != null)
+          SoftBanner(
+            tone: BannerTone.warning,
+            child: LeadText(
+              lead: 'Worth a look.',
+              body: worthALook,
+              leadColor: c.warningFg,
+            ),
           ),
-        ),
         StatusToast(message: _toast, icon: null),
         ButtonRow(
           children: [
@@ -259,12 +331,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
             SteadyButton(
               'Save as PDF',
               height: 48,
-              onPressed: () => setState(() => _toast = s.pdfToast),
+              onPressed: () =>
+                  setState(() => _toast = 'PDF reports are coming soon.'),
             ),
           ],
         ),
         Text(
-          s.footer,
+          _month
+              ? 'Calculated on this phone from your own entries.'
+              : 'Calculated on this phone from your own entries. '
+                    'Week starts ${weekdayName(weekStartsOn)}; change it in Profile.',
           textAlign: TextAlign.center,
           style: SteadyType.caption.copyWith(
             fontSize: 12,
@@ -277,11 +353,51 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 }
 
+/// "Worth a look": the biggest day (or week) and what drove it.
+String? _worthALook(PeriodSummary s, String Function(int) whole) {
+  final b = s.biggest;
+  if (b == null) return null;
+  final what = s.isMonth
+      ? 'Week ${b.bar.label.substring(3)}'
+      : weekdayName(b.bar.start.weekday);
+  final drivers = [
+    if (b.topCategory != null) 'mostly ${b.topCategory!.toLowerCase()}',
+    if (b.topMood != null) 'while ${b.topMood!.label.toLowerCase()}',
+  ].join(' ');
+  final tail = drivers.isEmpty
+      ? '.'
+      : '. ${drivers[0].toUpperCase()}${drivers.substring(1)}.';
+  if (b.overByCents > 0) {
+    return s.isMonth
+        ? '$what ran over pace by ${whole(b.overByCents)}$tail'
+        : '$what went ${whole(b.overByCents)} over your number$tail';
+  }
+  return '$what was your biggest ${s.isMonth ? 'week' : 'day'}: '
+      '${whole(b.bar.cents)}${drivers.isEmpty ? '' : ', $drivers'}.';
+}
+
+class _Note {
+  const _Note(this.text, this.color);
+  final String text;
+  final Color color;
+}
+
+class _Empty extends StatelessWidget {
+  const _Empty(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: SteadyType.caption.copyWith(color: context.colors.muted),
+  );
+}
+
 class _Stat extends StatelessWidget {
   const _Stat({required this.label, required this.value, required this.note});
   final String label;
   final String value;
-  final String note;
+  final _Note note;
 
   @override
   Widget build(BuildContext context) {
@@ -312,12 +428,12 @@ class _Stat extends StatelessWidget {
             ),
           ),
           Text(
-            note,
+            note.text,
             maxLines: 2,
             style: SteadyType.caption.copyWith(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: c.positive,
+              color: note.color,
             ),
           ),
         ],
@@ -359,7 +475,7 @@ class _Key extends StatelessWidget {
 /// Bars against a dashed pace line. Over the pace = Over color, plus label.
 class _PaceChart extends StatelessWidget {
   const _PaceChart({required this.bars, required this.pace, required this.gap});
-  final List<LabeledAmount> bars;
+  final List<ChartBar> bars;
   final int pace;
   final double gap;
 
@@ -386,7 +502,7 @@ class _PaceChart extends StatelessWidget {
                       Container(
                         height: bars[i].cents / max * height,
                         decoration: BoxDecoration(
-                          color: bars[i].cents > pace ? c.chartOver : c.primary,
+                          color: bars[i].over ? c.chartOver : c.primary,
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(6),
                             bottom: Radius.circular(2),

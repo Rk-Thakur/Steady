@@ -149,6 +149,105 @@ class $SettingsRowsTable extends SettingsRows
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       ).withConverter<LocalDate?>($SettingsRowsTable.$converterlastBackupOnn);
+  static const VerificationMeta _remindLogSpendsMeta = const VerificationMeta(
+    'remindLogSpends',
+  );
+  @override
+  late final GeneratedColumn<bool> remindLogSpends = GeneratedColumn<bool>(
+    'remind_log_spends',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("remind_log_spends" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _remindLogAtMeta = const VerificationMeta(
+    'remindLogAt',
+  );
+  @override
+  late final GeneratedColumn<int> remindLogAt = GeneratedColumn<int>(
+    'remind_log_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1230),
+  );
+  static const VerificationMeta _remindBillsMeta = const VerificationMeta(
+    'remindBills',
+  );
+  @override
+  late final GeneratedColumn<bool> remindBills = GeneratedColumn<bool>(
+    'remind_bills',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("remind_bills" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _remindLatePauseMeta = const VerificationMeta(
+    'remindLatePause',
+  );
+  @override
+  late final GeneratedColumn<bool> remindLatePause = GeneratedColumn<bool>(
+    'remind_late_pause',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("remind_late_pause" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _remindRecapsMeta = const VerificationMeta(
+    'remindRecaps',
+  );
+  @override
+  late final GeneratedColumn<bool> remindRecaps = GeneratedColumn<bool>(
+    'remind_recaps',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("remind_recaps" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _remindBackupMeta = const VerificationMeta(
+    'remindBackup',
+  );
+  @override
+  late final GeneratedColumn<bool> remindBackup = GeneratedColumn<bool>(
+    'remind_backup',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("remind_backup" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _quietFromMeta = const VerificationMeta(
+    'quietFrom',
+  );
+  @override
+  late final GeneratedColumn<int> quietFrom = GeneratedColumn<int>(
+    'quiet_from',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1380),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -164,6 +263,13 @@ class $SettingsRowsTable extends SettingsRows
     overspendStrategy,
     onboarded,
     lastBackupOn,
+    remindLogSpends,
+    remindLogAt,
+    remindBills,
+    remindLatePause,
+    remindRecaps,
+    remindBackup,
+    quietFrom,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -220,6 +326,66 @@ class $SettingsRowsTable extends SettingsRows
       context.handle(
         _onboardedMeta,
         onboarded.isAcceptableOrUnknown(data['onboarded']!, _onboardedMeta),
+      );
+    }
+    if (data.containsKey('remind_log_spends')) {
+      context.handle(
+        _remindLogSpendsMeta,
+        remindLogSpends.isAcceptableOrUnknown(
+          data['remind_log_spends']!,
+          _remindLogSpendsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remind_log_at')) {
+      context.handle(
+        _remindLogAtMeta,
+        remindLogAt.isAcceptableOrUnknown(
+          data['remind_log_at']!,
+          _remindLogAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remind_bills')) {
+      context.handle(
+        _remindBillsMeta,
+        remindBills.isAcceptableOrUnknown(
+          data['remind_bills']!,
+          _remindBillsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remind_late_pause')) {
+      context.handle(
+        _remindLatePauseMeta,
+        remindLatePause.isAcceptableOrUnknown(
+          data['remind_late_pause']!,
+          _remindLatePauseMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remind_recaps')) {
+      context.handle(
+        _remindRecapsMeta,
+        remindRecaps.isAcceptableOrUnknown(
+          data['remind_recaps']!,
+          _remindRecapsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remind_backup')) {
+      context.handle(
+        _remindBackupMeta,
+        remindBackup.isAcceptableOrUnknown(
+          data['remind_backup']!,
+          _remindBackupMeta,
+        ),
+      );
+    }
+    if (data.containsKey('quiet_from')) {
+      context.handle(
+        _quietFromMeta,
+        quietFrom.isAcceptableOrUnknown(data['quiet_from']!, _quietFromMeta),
       );
     }
     return context;
@@ -297,6 +463,34 @@ class $SettingsRowsTable extends SettingsRows
           data['${effectivePrefix}last_backup_on'],
         ),
       ),
+      remindLogSpends: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}remind_log_spends'],
+      )!,
+      remindLogAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}remind_log_at'],
+      )!,
+      remindBills: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}remind_bills'],
+      )!,
+      remindLatePause: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}remind_late_pause'],
+      )!,
+      remindRecaps: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}remind_recaps'],
+      )!,
+      remindBackup: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}remind_backup'],
+      )!,
+      quietFrom: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quiet_from'],
+      )!,
     );
   }
 
@@ -343,6 +537,15 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
 
   /// v3: when the user last created a .steady backup file.
   final LocalDate? lastBackupOn;
+
+  /// v5: Reminders (see ReminderSettings for meanings and defaults).
+  final bool remindLogSpends;
+  final int remindLogAt;
+  final bool remindBills;
+  final bool remindLatePause;
+  final bool remindRecaps;
+  final bool remindBackup;
+  final int quietFrom;
   const SettingsRow({
     required this.id,
     required this.currency,
@@ -357,6 +560,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     required this.overspendStrategy,
     required this.onboarded,
     this.lastBackupOn,
+    required this.remindLogSpends,
+    required this.remindLogAt,
+    required this.remindBills,
+    required this.remindLatePause,
+    required this.remindRecaps,
+    required this.remindBackup,
+    required this.quietFrom,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -406,6 +616,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
         $SettingsRowsTable.$converterlastBackupOnn.toSql(lastBackupOn),
       );
     }
+    map['remind_log_spends'] = Variable<bool>(remindLogSpends);
+    map['remind_log_at'] = Variable<int>(remindLogAt);
+    map['remind_bills'] = Variable<bool>(remindBills);
+    map['remind_late_pause'] = Variable<bool>(remindLatePause);
+    map['remind_recaps'] = Variable<bool>(remindRecaps);
+    map['remind_backup'] = Variable<bool>(remindBackup);
+    map['quiet_from'] = Variable<int>(quietFrom);
     return map;
   }
 
@@ -430,6 +647,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       lastBackupOn: lastBackupOn == null && nullToAbsent
           ? const Value.absent()
           : Value(lastBackupOn),
+      remindLogSpends: Value(remindLogSpends),
+      remindLogAt: Value(remindLogAt),
+      remindBills: Value(remindBills),
+      remindLatePause: Value(remindLatePause),
+      remindRecaps: Value(remindRecaps),
+      remindBackup: Value(remindBackup),
+      quietFrom: Value(quietFrom),
     );
   }
 
@@ -461,6 +685,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           .fromJson(serializer.fromJson<String>(json['overspendStrategy'])),
       onboarded: serializer.fromJson<bool>(json['onboarded']),
       lastBackupOn: serializer.fromJson<LocalDate?>(json['lastBackupOn']),
+      remindLogSpends: serializer.fromJson<bool>(json['remindLogSpends']),
+      remindLogAt: serializer.fromJson<int>(json['remindLogAt']),
+      remindBills: serializer.fromJson<bool>(json['remindBills']),
+      remindLatePause: serializer.fromJson<bool>(json['remindLatePause']),
+      remindRecaps: serializer.fromJson<bool>(json['remindRecaps']),
+      remindBackup: serializer.fromJson<bool>(json['remindBackup']),
+      quietFrom: serializer.fromJson<int>(json['quietFrom']),
     );
   }
   @override
@@ -492,6 +723,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       ),
       'onboarded': serializer.toJson<bool>(onboarded),
       'lastBackupOn': serializer.toJson<LocalDate?>(lastBackupOn),
+      'remindLogSpends': serializer.toJson<bool>(remindLogSpends),
+      'remindLogAt': serializer.toJson<int>(remindLogAt),
+      'remindBills': serializer.toJson<bool>(remindBills),
+      'remindLatePause': serializer.toJson<bool>(remindLatePause),
+      'remindRecaps': serializer.toJson<bool>(remindRecaps),
+      'remindBackup': serializer.toJson<bool>(remindBackup),
+      'quietFrom': serializer.toJson<int>(quietFrom),
     };
   }
 
@@ -509,6 +747,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     OverspendStrategy? overspendStrategy,
     bool? onboarded,
     Value<LocalDate?> lastBackupOn = const Value.absent(),
+    bool? remindLogSpends,
+    int? remindLogAt,
+    bool? remindBills,
+    bool? remindLatePause,
+    bool? remindRecaps,
+    bool? remindBackup,
+    int? quietFrom,
   }) => SettingsRow(
     id: id ?? this.id,
     currency: currency ?? this.currency,
@@ -525,6 +770,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     overspendStrategy: overspendStrategy ?? this.overspendStrategy,
     onboarded: onboarded ?? this.onboarded,
     lastBackupOn: lastBackupOn.present ? lastBackupOn.value : this.lastBackupOn,
+    remindLogSpends: remindLogSpends ?? this.remindLogSpends,
+    remindLogAt: remindLogAt ?? this.remindLogAt,
+    remindBills: remindBills ?? this.remindBills,
+    remindLatePause: remindLatePause ?? this.remindLatePause,
+    remindRecaps: remindRecaps ?? this.remindRecaps,
+    remindBackup: remindBackup ?? this.remindBackup,
+    quietFrom: quietFrom ?? this.quietFrom,
   );
   SettingsRow copyWithCompanion(SettingsRowsCompanion data) {
     return SettingsRow(
@@ -559,6 +811,25 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       lastBackupOn: data.lastBackupOn.present
           ? data.lastBackupOn.value
           : this.lastBackupOn,
+      remindLogSpends: data.remindLogSpends.present
+          ? data.remindLogSpends.value
+          : this.remindLogSpends,
+      remindLogAt: data.remindLogAt.present
+          ? data.remindLogAt.value
+          : this.remindLogAt,
+      remindBills: data.remindBills.present
+          ? data.remindBills.value
+          : this.remindBills,
+      remindLatePause: data.remindLatePause.present
+          ? data.remindLatePause.value
+          : this.remindLatePause,
+      remindRecaps: data.remindRecaps.present
+          ? data.remindRecaps.value
+          : this.remindRecaps,
+      remindBackup: data.remindBackup.present
+          ? data.remindBackup.value
+          : this.remindBackup,
+      quietFrom: data.quietFrom.present ? data.quietFrom.value : this.quietFrom,
     );
   }
 
@@ -577,7 +848,14 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           ..write('appLockEnabled: $appLockEnabled, ')
           ..write('overspendStrategy: $overspendStrategy, ')
           ..write('onboarded: $onboarded, ')
-          ..write('lastBackupOn: $lastBackupOn')
+          ..write('lastBackupOn: $lastBackupOn, ')
+          ..write('remindLogSpends: $remindLogSpends, ')
+          ..write('remindLogAt: $remindLogAt, ')
+          ..write('remindBills: $remindBills, ')
+          ..write('remindLatePause: $remindLatePause, ')
+          ..write('remindRecaps: $remindRecaps, ')
+          ..write('remindBackup: $remindBackup, ')
+          ..write('quietFrom: $quietFrom')
           ..write(')'))
         .toString();
   }
@@ -597,6 +875,13 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     overspendStrategy,
     onboarded,
     lastBackupOn,
+    remindLogSpends,
+    remindLogAt,
+    remindBills,
+    remindLatePause,
+    remindRecaps,
+    remindBackup,
+    quietFrom,
   );
   @override
   bool operator ==(Object other) =>
@@ -614,7 +899,14 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           other.appLockEnabled == this.appLockEnabled &&
           other.overspendStrategy == this.overspendStrategy &&
           other.onboarded == this.onboarded &&
-          other.lastBackupOn == this.lastBackupOn);
+          other.lastBackupOn == this.lastBackupOn &&
+          other.remindLogSpends == this.remindLogSpends &&
+          other.remindLogAt == this.remindLogAt &&
+          other.remindBills == this.remindBills &&
+          other.remindLatePause == this.remindLatePause &&
+          other.remindRecaps == this.remindRecaps &&
+          other.remindBackup == this.remindBackup &&
+          other.quietFrom == this.quietFrom);
 }
 
 class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
@@ -631,6 +923,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
   final Value<OverspendStrategy> overspendStrategy;
   final Value<bool> onboarded;
   final Value<LocalDate?> lastBackupOn;
+  final Value<bool> remindLogSpends;
+  final Value<int> remindLogAt;
+  final Value<bool> remindBills;
+  final Value<bool> remindLatePause;
+  final Value<bool> remindRecaps;
+  final Value<bool> remindBackup;
+  final Value<int> quietFrom;
   const SettingsRowsCompanion({
     this.id = const Value.absent(),
     this.currency = const Value.absent(),
@@ -645,6 +944,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     this.overspendStrategy = const Value.absent(),
     this.onboarded = const Value.absent(),
     this.lastBackupOn = const Value.absent(),
+    this.remindLogSpends = const Value.absent(),
+    this.remindLogAt = const Value.absent(),
+    this.remindBills = const Value.absent(),
+    this.remindLatePause = const Value.absent(),
+    this.remindRecaps = const Value.absent(),
+    this.remindBackup = const Value.absent(),
+    this.quietFrom = const Value.absent(),
   });
   SettingsRowsCompanion.insert({
     this.id = const Value.absent(),
@@ -660,6 +966,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     required OverspendStrategy overspendStrategy,
     this.onboarded = const Value.absent(),
     this.lastBackupOn = const Value.absent(),
+    this.remindLogSpends = const Value.absent(),
+    this.remindLogAt = const Value.absent(),
+    this.remindBills = const Value.absent(),
+    this.remindLatePause = const Value.absent(),
+    this.remindRecaps = const Value.absent(),
+    this.remindBackup = const Value.absent(),
+    this.quietFrom = const Value.absent(),
   }) : currency = Value(currency),
        payFrequency = Value(payFrequency),
        nextPayday = Value(nextPayday),
@@ -680,6 +993,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Expression<String>? overspendStrategy,
     Expression<bool>? onboarded,
     Expression<String>? lastBackupOn,
+    Expression<bool>? remindLogSpends,
+    Expression<int>? remindLogAt,
+    Expression<bool>? remindBills,
+    Expression<bool>? remindLatePause,
+    Expression<bool>? remindRecaps,
+    Expression<bool>? remindBackup,
+    Expression<int>? quietFrom,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -695,6 +1015,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       if (overspendStrategy != null) 'overspend_strategy': overspendStrategy,
       if (onboarded != null) 'onboarded': onboarded,
       if (lastBackupOn != null) 'last_backup_on': lastBackupOn,
+      if (remindLogSpends != null) 'remind_log_spends': remindLogSpends,
+      if (remindLogAt != null) 'remind_log_at': remindLogAt,
+      if (remindBills != null) 'remind_bills': remindBills,
+      if (remindLatePause != null) 'remind_late_pause': remindLatePause,
+      if (remindRecaps != null) 'remind_recaps': remindRecaps,
+      if (remindBackup != null) 'remind_backup': remindBackup,
+      if (quietFrom != null) 'quiet_from': quietFrom,
     });
   }
 
@@ -712,6 +1039,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Value<OverspendStrategy>? overspendStrategy,
     Value<bool>? onboarded,
     Value<LocalDate?>? lastBackupOn,
+    Value<bool>? remindLogSpends,
+    Value<int>? remindLogAt,
+    Value<bool>? remindBills,
+    Value<bool>? remindLatePause,
+    Value<bool>? remindRecaps,
+    Value<bool>? remindBackup,
+    Value<int>? quietFrom,
   }) {
     return SettingsRowsCompanion(
       id: id ?? this.id,
@@ -727,6 +1061,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       overspendStrategy: overspendStrategy ?? this.overspendStrategy,
       onboarded: onboarded ?? this.onboarded,
       lastBackupOn: lastBackupOn ?? this.lastBackupOn,
+      remindLogSpends: remindLogSpends ?? this.remindLogSpends,
+      remindLogAt: remindLogAt ?? this.remindLogAt,
+      remindBills: remindBills ?? this.remindBills,
+      remindLatePause: remindLatePause ?? this.remindLatePause,
+      remindRecaps: remindRecaps ?? this.remindRecaps,
+      remindBackup: remindBackup ?? this.remindBackup,
+      quietFrom: quietFrom ?? this.quietFrom,
     );
   }
 
@@ -788,6 +1129,27 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
         $SettingsRowsTable.$converterlastBackupOnn.toSql(lastBackupOn.value),
       );
     }
+    if (remindLogSpends.present) {
+      map['remind_log_spends'] = Variable<bool>(remindLogSpends.value);
+    }
+    if (remindLogAt.present) {
+      map['remind_log_at'] = Variable<int>(remindLogAt.value);
+    }
+    if (remindBills.present) {
+      map['remind_bills'] = Variable<bool>(remindBills.value);
+    }
+    if (remindLatePause.present) {
+      map['remind_late_pause'] = Variable<bool>(remindLatePause.value);
+    }
+    if (remindRecaps.present) {
+      map['remind_recaps'] = Variable<bool>(remindRecaps.value);
+    }
+    if (remindBackup.present) {
+      map['remind_backup'] = Variable<bool>(remindBackup.value);
+    }
+    if (quietFrom.present) {
+      map['quiet_from'] = Variable<int>(quietFrom.value);
+    }
     return map;
   }
 
@@ -806,7 +1168,14 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
           ..write('appLockEnabled: $appLockEnabled, ')
           ..write('overspendStrategy: $overspendStrategy, ')
           ..write('onboarded: $onboarded, ')
-          ..write('lastBackupOn: $lastBackupOn')
+          ..write('lastBackupOn: $lastBackupOn, ')
+          ..write('remindLogSpends: $remindLogSpends, ')
+          ..write('remindLogAt: $remindLogAt, ')
+          ..write('remindBills: $remindBills, ')
+          ..write('remindLatePause: $remindLatePause, ')
+          ..write('remindRecaps: $remindRecaps, ')
+          ..write('remindBackup: $remindBackup, ')
+          ..write('quietFrom: $quietFrom')
           ..write(')'))
         .toString();
   }
@@ -3136,6 +3505,15 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
     defaultValue: const Constant(0),
   );
   @override
+  late final GeneratedColumnWithTypeConverter<LocalDate?, String> createdOn =
+      GeneratedColumn<String>(
+        'created_on',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<LocalDate?>($GoalsTable.$convertercreatedOnn);
+  @override
   List<GeneratedColumn> get $columns => [
     id,
     name,
@@ -3146,6 +3524,7 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
     targetDate,
     paused,
     sortOrder,
+    createdOn,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3263,6 +3642,12 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      createdOn: $GoalsTable.$convertercreatedOnn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}created_on'],
+        ),
+      ),
     );
   }
 
@@ -3277,6 +3662,10 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
       const LocalDateConverter();
   static TypeConverter<LocalDate?, String?> $convertertargetDaten =
       NullAwareTypeConverter.wrap($convertertargetDate);
+  static TypeConverter<LocalDate, String> $convertercreatedOn =
+      const LocalDateConverter();
+  static TypeConverter<LocalDate?, String?> $convertercreatedOnn =
+      NullAwareTypeConverter.wrap($convertercreatedOn);
 }
 
 class GoalRow extends DataClass implements Insertable<GoalRow> {
@@ -3289,6 +3678,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
   final LocalDate? targetDate;
   final bool paused;
   final int sortOrder;
+  final LocalDate? createdOn;
   const GoalRow({
     required this.id,
     required this.name,
@@ -3299,6 +3689,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     this.targetDate,
     required this.paused,
     required this.sortOrder,
+    this.createdOn,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3318,6 +3709,11 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     }
     map['paused'] = Variable<bool>(paused);
     map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || createdOn != null) {
+      map['created_on'] = Variable<String>(
+        $GoalsTable.$convertercreatedOnn.toSql(createdOn),
+      );
+    }
     return map;
   }
 
@@ -3334,6 +3730,9 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
           : Value(targetDate),
       paused: Value(paused),
       sortOrder: Value(sortOrder),
+      createdOn: createdOn == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdOn),
     );
   }
 
@@ -3354,6 +3753,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
       targetDate: serializer.fromJson<LocalDate?>(json['targetDate']),
       paused: serializer.fromJson<bool>(json['paused']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdOn: serializer.fromJson<LocalDate?>(json['createdOn']),
     );
   }
   @override
@@ -3371,6 +3771,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
       'targetDate': serializer.toJson<LocalDate?>(targetDate),
       'paused': serializer.toJson<bool>(paused),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdOn': serializer.toJson<LocalDate?>(createdOn),
     };
   }
 
@@ -3384,6 +3785,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     Value<LocalDate?> targetDate = const Value.absent(),
     bool? paused,
     int? sortOrder,
+    Value<LocalDate?> createdOn = const Value.absent(),
   }) => GoalRow(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -3394,6 +3796,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     targetDate: targetDate.present ? targetDate.value : this.targetDate,
     paused: paused ?? this.paused,
     sortOrder: sortOrder ?? this.sortOrder,
+    createdOn: createdOn.present ? createdOn.value : this.createdOn,
   );
   GoalRow copyWithCompanion(GoalsCompanion data) {
     return GoalRow(
@@ -3414,6 +3817,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
           : this.targetDate,
       paused: data.paused.present ? data.paused.value : this.paused,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdOn: data.createdOn.present ? data.createdOn.value : this.createdOn,
     );
   }
 
@@ -3428,7 +3832,8 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
           ..write('dailySetAsideCents: $dailySetAsideCents, ')
           ..write('targetDate: $targetDate, ')
           ..write('paused: $paused, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdOn: $createdOn')
           ..write(')'))
         .toString();
   }
@@ -3444,6 +3849,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     targetDate,
     paused,
     sortOrder,
+    createdOn,
   );
   @override
   bool operator ==(Object other) =>
@@ -3457,7 +3863,8 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
           other.dailySetAsideCents == this.dailySetAsideCents &&
           other.targetDate == this.targetDate &&
           other.paused == this.paused &&
-          other.sortOrder == this.sortOrder);
+          other.sortOrder == this.sortOrder &&
+          other.createdOn == this.createdOn);
 }
 
 class GoalsCompanion extends UpdateCompanion<GoalRow> {
@@ -3470,6 +3877,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
   final Value<LocalDate?> targetDate;
   final Value<bool> paused;
   final Value<int> sortOrder;
+  final Value<LocalDate?> createdOn;
   final Value<int> rowid;
   const GoalsCompanion({
     this.id = const Value.absent(),
@@ -3481,6 +3889,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     this.targetDate = const Value.absent(),
     this.paused = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.createdOn = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   GoalsCompanion.insert({
@@ -3493,6 +3902,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     this.targetDate = const Value.absent(),
     this.paused = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.createdOn = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -3510,6 +3920,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     Expression<String>? targetDate,
     Expression<bool>? paused,
     Expression<int>? sortOrder,
+    Expression<String>? createdOn,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3523,6 +3934,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
       if (targetDate != null) 'target_date': targetDate,
       if (paused != null) 'paused': paused,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdOn != null) 'created_on': createdOn,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3537,6 +3949,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     Value<LocalDate?>? targetDate,
     Value<bool>? paused,
     Value<int>? sortOrder,
+    Value<LocalDate?>? createdOn,
     Value<int>? rowid,
   }) {
     return GoalsCompanion(
@@ -3549,6 +3962,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
       targetDate: targetDate ?? this.targetDate,
       paused: paused ?? this.paused,
       sortOrder: sortOrder ?? this.sortOrder,
+      createdOn: createdOn ?? this.createdOn,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3587,6 +4001,11 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (createdOn.present) {
+      map['created_on'] = Variable<String>(
+        $GoalsTable.$convertercreatedOnn.toSql(createdOn.value),
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3605,6 +4024,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
           ..write('targetDate: $targetDate, ')
           ..write('paused: $paused, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('createdOn: $createdOn, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4966,6 +5386,230 @@ class OverspendDecisionsCompanion
   }
 }
 
+class $DailyNumbersTable extends DailyNumbers
+    with TableInfo<$DailyNumbersTable, DailyNumberRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DailyNumbersTable(this.attachedDatabase, [this._alias]);
+  @override
+  late final GeneratedColumnWithTypeConverter<LocalDate, String> localDate =
+      GeneratedColumn<String>(
+        'local_date',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<LocalDate>($DailyNumbersTable.$converterlocalDate);
+  static const VerificationMeta _allowanceCentsMeta = const VerificationMeta(
+    'allowanceCents',
+  );
+  @override
+  late final GeneratedColumn<int> allowanceCents = GeneratedColumn<int>(
+    'allowance_cents',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [localDate, allowanceCents];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'daily_numbers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DailyNumberRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('allowance_cents')) {
+      context.handle(
+        _allowanceCentsMeta,
+        allowanceCents.isAcceptableOrUnknown(
+          data['allowance_cents']!,
+          _allowanceCentsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_allowanceCentsMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {localDate};
+  @override
+  DailyNumberRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DailyNumberRow(
+      localDate: $DailyNumbersTable.$converterlocalDate.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}local_date'],
+        )!,
+      ),
+      allowanceCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}allowance_cents'],
+      )!,
+    );
+  }
+
+  @override
+  $DailyNumbersTable createAlias(String alias) {
+    return $DailyNumbersTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<LocalDate, String> $converterlocalDate =
+      const LocalDateConverter();
+}
+
+class DailyNumberRow extends DataClass implements Insertable<DailyNumberRow> {
+  final LocalDate localDate;
+  final int allowanceCents;
+  const DailyNumberRow({required this.localDate, required this.allowanceCents});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    {
+      map['local_date'] = Variable<String>(
+        $DailyNumbersTable.$converterlocalDate.toSql(localDate),
+      );
+    }
+    map['allowance_cents'] = Variable<int>(allowanceCents);
+    return map;
+  }
+
+  DailyNumbersCompanion toCompanion(bool nullToAbsent) {
+    return DailyNumbersCompanion(
+      localDate: Value(localDate),
+      allowanceCents: Value(allowanceCents),
+    );
+  }
+
+  factory DailyNumberRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DailyNumberRow(
+      localDate: serializer.fromJson<LocalDate>(json['localDate']),
+      allowanceCents: serializer.fromJson<int>(json['allowanceCents']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'localDate': serializer.toJson<LocalDate>(localDate),
+      'allowanceCents': serializer.toJson<int>(allowanceCents),
+    };
+  }
+
+  DailyNumberRow copyWith({LocalDate? localDate, int? allowanceCents}) =>
+      DailyNumberRow(
+        localDate: localDate ?? this.localDate,
+        allowanceCents: allowanceCents ?? this.allowanceCents,
+      );
+  DailyNumberRow copyWithCompanion(DailyNumbersCompanion data) {
+    return DailyNumberRow(
+      localDate: data.localDate.present ? data.localDate.value : this.localDate,
+      allowanceCents: data.allowanceCents.present
+          ? data.allowanceCents.value
+          : this.allowanceCents,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailyNumberRow(')
+          ..write('localDate: $localDate, ')
+          ..write('allowanceCents: $allowanceCents')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(localDate, allowanceCents);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DailyNumberRow &&
+          other.localDate == this.localDate &&
+          other.allowanceCents == this.allowanceCents);
+}
+
+class DailyNumbersCompanion extends UpdateCompanion<DailyNumberRow> {
+  final Value<LocalDate> localDate;
+  final Value<int> allowanceCents;
+  final Value<int> rowid;
+  const DailyNumbersCompanion({
+    this.localDate = const Value.absent(),
+    this.allowanceCents = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DailyNumbersCompanion.insert({
+    required LocalDate localDate,
+    required int allowanceCents,
+    this.rowid = const Value.absent(),
+  }) : localDate = Value(localDate),
+       allowanceCents = Value(allowanceCents);
+  static Insertable<DailyNumberRow> custom({
+    Expression<String>? localDate,
+    Expression<int>? allowanceCents,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (localDate != null) 'local_date': localDate,
+      if (allowanceCents != null) 'allowance_cents': allowanceCents,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DailyNumbersCompanion copyWith({
+    Value<LocalDate>? localDate,
+    Value<int>? allowanceCents,
+    Value<int>? rowid,
+  }) {
+    return DailyNumbersCompanion(
+      localDate: localDate ?? this.localDate,
+      allowanceCents: allowanceCents ?? this.allowanceCents,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (localDate.present) {
+      map['local_date'] = Variable<String>(
+        $DailyNumbersTable.$converterlocalDate.toSql(localDate.value),
+      );
+    }
+    if (allowanceCents.present) {
+      map['allowance_cents'] = Variable<int>(allowanceCents.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailyNumbersCompanion(')
+          ..write('localDate: $localDate, ')
+          ..write('allowanceCents: $allowanceCents, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$SteadyDatabase extends GeneratedDatabase {
   _$SteadyDatabase(QueryExecutor e) : super(e);
   $SteadyDatabaseManager get managers => $SteadyDatabaseManager(this);
@@ -4980,6 +5624,7 @@ abstract class _$SteadyDatabase extends GeneratedDatabase {
   late final $SharedExpensesTable sharedExpenses = $SharedExpensesTable(this);
   late final $OverspendDecisionsTable overspendDecisions =
       $OverspendDecisionsTable(this);
+  late final $DailyNumbersTable dailyNumbers = $DailyNumbersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4995,6 +5640,7 @@ abstract class _$SteadyDatabase extends GeneratedDatabase {
     splits,
     sharedExpenses,
     overspendDecisions,
+    dailyNumbers,
   ];
 }
 
@@ -5013,6 +5659,13 @@ typedef $$SettingsRowsTableCreateCompanionBuilder =
       required OverspendStrategy overspendStrategy,
       Value<bool> onboarded,
       Value<LocalDate?> lastBackupOn,
+      Value<bool> remindLogSpends,
+      Value<int> remindLogAt,
+      Value<bool> remindBills,
+      Value<bool> remindLatePause,
+      Value<bool> remindRecaps,
+      Value<bool> remindBackup,
+      Value<int> quietFrom,
     });
 typedef $$SettingsRowsTableUpdateCompanionBuilder =
     SettingsRowsCompanion Function({
@@ -5029,6 +5682,13 @@ typedef $$SettingsRowsTableUpdateCompanionBuilder =
       Value<OverspendStrategy> overspendStrategy,
       Value<bool> onboarded,
       Value<LocalDate?> lastBackupOn,
+      Value<bool> remindLogSpends,
+      Value<int> remindLogAt,
+      Value<bool> remindBills,
+      Value<bool> remindLatePause,
+      Value<bool> remindRecaps,
+      Value<bool> remindBackup,
+      Value<int> quietFrom,
     });
 
 class $$SettingsRowsTableFilterComposer
@@ -5111,6 +5771,41 @@ class $$SettingsRowsTableFilterComposer
     column: $table.lastBackupOn,
     builder: (column) => ColumnWithTypeConverterFilters(column),
   );
+
+  ColumnFilters<bool> get remindLogSpends => $composableBuilder(
+    column: $table.remindLogSpends,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get remindLogAt => $composableBuilder(
+    column: $table.remindLogAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get remindBills => $composableBuilder(
+    column: $table.remindBills,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get remindLatePause => $composableBuilder(
+    column: $table.remindLatePause,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get remindRecaps => $composableBuilder(
+    column: $table.remindRecaps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get remindBackup => $composableBuilder(
+    column: $table.remindBackup,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get quietFrom => $composableBuilder(
+    column: $table.quietFrom,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$SettingsRowsTableOrderingComposer
@@ -5186,6 +5881,41 @@ class $$SettingsRowsTableOrderingComposer
     column: $table.lastBackupOn,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get remindLogSpends => $composableBuilder(
+    column: $table.remindLogSpends,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get remindLogAt => $composableBuilder(
+    column: $table.remindLogAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get remindBills => $composableBuilder(
+    column: $table.remindBills,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get remindLatePause => $composableBuilder(
+    column: $table.remindLatePause,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get remindRecaps => $composableBuilder(
+    column: $table.remindRecaps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get remindBackup => $composableBuilder(
+    column: $table.remindBackup,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quietFrom => $composableBuilder(
+    column: $table.quietFrom,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SettingsRowsTableAnnotationComposer
@@ -5258,6 +5988,39 @@ class $$SettingsRowsTableAnnotationComposer
         column: $table.lastBackupOn,
         builder: (column) => column,
       );
+
+  GeneratedColumn<bool> get remindLogSpends => $composableBuilder(
+    column: $table.remindLogSpends,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get remindLogAt => $composableBuilder(
+    column: $table.remindLogAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get remindBills => $composableBuilder(
+    column: $table.remindBills,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get remindLatePause => $composableBuilder(
+    column: $table.remindLatePause,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get remindRecaps => $composableBuilder(
+    column: $table.remindRecaps,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get remindBackup => $composableBuilder(
+    column: $table.remindBackup,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get quietFrom =>
+      $composableBuilder(column: $table.quietFrom, builder: (column) => column);
 }
 
 class $$SettingsRowsTableTableManager
@@ -5305,6 +6068,13 @@ class $$SettingsRowsTableTableManager
                     const Value.absent(),
                 Value<bool> onboarded = const Value.absent(),
                 Value<LocalDate?> lastBackupOn = const Value.absent(),
+                Value<bool> remindLogSpends = const Value.absent(),
+                Value<int> remindLogAt = const Value.absent(),
+                Value<bool> remindBills = const Value.absent(),
+                Value<bool> remindLatePause = const Value.absent(),
+                Value<bool> remindRecaps = const Value.absent(),
+                Value<bool> remindBackup = const Value.absent(),
+                Value<int> quietFrom = const Value.absent(),
               }) => SettingsRowsCompanion(
                 id: id,
                 currency: currency,
@@ -5319,6 +6089,13 @@ class $$SettingsRowsTableTableManager
                 overspendStrategy: overspendStrategy,
                 onboarded: onboarded,
                 lastBackupOn: lastBackupOn,
+                remindLogSpends: remindLogSpends,
+                remindLogAt: remindLogAt,
+                remindBills: remindBills,
+                remindLatePause: remindLatePause,
+                remindRecaps: remindRecaps,
+                remindBackup: remindBackup,
+                quietFrom: quietFrom,
               ),
           createCompanionCallback:
               ({
@@ -5335,6 +6112,13 @@ class $$SettingsRowsTableTableManager
                 required OverspendStrategy overspendStrategy,
                 Value<bool> onboarded = const Value.absent(),
                 Value<LocalDate?> lastBackupOn = const Value.absent(),
+                Value<bool> remindLogSpends = const Value.absent(),
+                Value<int> remindLogAt = const Value.absent(),
+                Value<bool> remindBills = const Value.absent(),
+                Value<bool> remindLatePause = const Value.absent(),
+                Value<bool> remindRecaps = const Value.absent(),
+                Value<bool> remindBackup = const Value.absent(),
+                Value<int> quietFrom = const Value.absent(),
               }) => SettingsRowsCompanion.insert(
                 id: id,
                 currency: currency,
@@ -5349,6 +6133,13 @@ class $$SettingsRowsTableTableManager
                 overspendStrategy: overspendStrategy,
                 onboarded: onboarded,
                 lastBackupOn: lastBackupOn,
+                remindLogSpends: remindLogSpends,
+                remindLogAt: remindLogAt,
+                remindBills: remindBills,
+                remindLatePause: remindLatePause,
+                remindRecaps: remindRecaps,
+                remindBackup: remindBackup,
+                quietFrom: quietFrom,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -6508,6 +7299,7 @@ typedef $$GoalsTableCreateCompanionBuilder = GoalsCompanion Function({
   Value<LocalDate?> targetDate,
   Value<bool> paused,
   Value<int> sortOrder,
+  Value<LocalDate?> createdOn,
   Value<int> rowid,
 });
 typedef $$GoalsTableUpdateCompanionBuilder = GoalsCompanion Function({
@@ -6520,6 +7312,7 @@ typedef $$GoalsTableUpdateCompanionBuilder = GoalsCompanion Function({
   Value<LocalDate?> targetDate,
   Value<bool> paused,
   Value<int> sortOrder,
+  Value<LocalDate?> createdOn,
   Value<int> rowid,
 });
 
@@ -6578,6 +7371,12 @@ class $$GoalsTableFilterComposer
     column: $table.sortOrder,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnWithTypeConverterFilters<LocalDate?, LocalDate, String> get createdOn =>
+      $composableBuilder(
+        column: $table.createdOn,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 }
 
 class $$GoalsTableOrderingComposer
@@ -6633,6 +7432,11 @@ class $$GoalsTableOrderingComposer
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get createdOn => $composableBuilder(
+    column: $table.createdOn,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$GoalsTableAnnotationComposer
@@ -6679,6 +7483,9 @@ class $$GoalsTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LocalDate?, String> get createdOn =>
+      $composableBuilder(column: $table.createdOn, builder: (column) => column);
 }
 
 class $$GoalsTableTableManager
@@ -6718,6 +7525,7 @@ class $$GoalsTableTableManager
                 Value<LocalDate?> targetDate = const Value.absent(),
                 Value<bool> paused = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<LocalDate?> createdOn = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GoalsCompanion(
                 id: id,
@@ -6729,6 +7537,7 @@ class $$GoalsTableTableManager
                 targetDate: targetDate,
                 paused: paused,
                 sortOrder: sortOrder,
+                createdOn: createdOn,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -6742,6 +7551,7 @@ class $$GoalsTableTableManager
                 Value<LocalDate?> targetDate = const Value.absent(),
                 Value<bool> paused = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<LocalDate?> createdOn = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GoalsCompanion.insert(
                 id: id,
@@ -6753,6 +7563,7 @@ class $$GoalsTableTableManager
                 targetDate: targetDate,
                 paused: paused,
                 sortOrder: sortOrder,
+                createdOn: createdOn,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -7592,6 +8403,165 @@ typedef $$OverspendDecisionsTableProcessedTableManager =
       OverspendDecisionRow,
       PrefetchHooks Function()
     >;
+typedef $$DailyNumbersTableCreateCompanionBuilder =
+    DailyNumbersCompanion Function({
+      required LocalDate localDate,
+      required int allowanceCents,
+      Value<int> rowid,
+    });
+typedef $$DailyNumbersTableUpdateCompanionBuilder =
+    DailyNumbersCompanion Function({
+      Value<LocalDate> localDate,
+      Value<int> allowanceCents,
+      Value<int> rowid,
+    });
+
+class $$DailyNumbersTableFilterComposer
+    extends Composer<_$SteadyDatabase, $DailyNumbersTable> {
+  $$DailyNumbersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnWithTypeConverterFilters<LocalDate, LocalDate, String> get localDate =>
+      $composableBuilder(
+        column: $table.localDate,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<int> get allowanceCents => $composableBuilder(
+    column: $table.allowanceCents,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DailyNumbersTableOrderingComposer
+    extends Composer<_$SteadyDatabase, $DailyNumbersTable> {
+  $$DailyNumbersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get allowanceCents => $composableBuilder(
+    column: $table.allowanceCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DailyNumbersTableAnnotationComposer
+    extends Composer<_$SteadyDatabase, $DailyNumbersTable> {
+  $$DailyNumbersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumnWithTypeConverter<LocalDate, String> get localDate =>
+      $composableBuilder(column: $table.localDate, builder: (column) => column);
+
+  GeneratedColumn<int> get allowanceCents => $composableBuilder(
+    column: $table.allowanceCents,
+    builder: (column) => column,
+  );
+}
+
+class $$DailyNumbersTableTableManager
+    extends
+        RootTableManager<
+          _$SteadyDatabase,
+          $DailyNumbersTable,
+          DailyNumberRow,
+          $$DailyNumbersTableFilterComposer,
+          $$DailyNumbersTableOrderingComposer,
+          $$DailyNumbersTableAnnotationComposer,
+          $$DailyNumbersTableCreateCompanionBuilder,
+          $$DailyNumbersTableUpdateCompanionBuilder,
+          (
+            DailyNumberRow,
+            BaseReferences<
+              _$SteadyDatabase,
+              $DailyNumbersTable,
+              DailyNumberRow
+            >,
+          ),
+          DailyNumberRow,
+          PrefetchHooks Function()
+        > {
+  $$DailyNumbersTableTableManager(_$SteadyDatabase db, $DailyNumbersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DailyNumbersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DailyNumbersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DailyNumbersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<LocalDate> localDate = const Value.absent(),
+                Value<int> allowanceCents = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DailyNumbersCompanion(
+                localDate: localDate,
+                allowanceCents: allowanceCents,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required LocalDate localDate,
+                required int allowanceCents,
+                Value<int> rowid = const Value.absent(),
+              }) => DailyNumbersCompanion.insert(
+                localDate: localDate,
+                allowanceCents: allowanceCents,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DailyNumbersTable, DailyNumberRow>(table),
+                  BaseReferences<
+                    _$SteadyDatabase,
+                    $DailyNumbersTable,
+                    DailyNumberRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DailyNumbersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$SteadyDatabase,
+      $DailyNumbersTable,
+      DailyNumberRow,
+      $$DailyNumbersTableFilterComposer,
+      $$DailyNumbersTableOrderingComposer,
+      $$DailyNumbersTableAnnotationComposer,
+      $$DailyNumbersTableCreateCompanionBuilder,
+      $$DailyNumbersTableUpdateCompanionBuilder,
+      (
+        DailyNumberRow,
+        BaseReferences<_$SteadyDatabase, $DailyNumbersTable, DailyNumberRow>,
+      ),
+      DailyNumberRow,
+      PrefetchHooks Function()
+    >;
 
 class $SteadyDatabaseManager {
   final _$SteadyDatabase _db;
@@ -7616,4 +8586,6 @@ class $SteadyDatabaseManager {
       $$SharedExpensesTableTableManager(_db, _db.sharedExpenses);
   $$OverspendDecisionsTableTableManager get overspendDecisions =>
       $$OverspendDecisionsTableTableManager(_db, _db.overspendDecisions);
+  $$DailyNumbersTableTableManager get dailyNumbers =>
+      $$DailyNumbersTableTableManager(_db, _db.dailyNumbers);
 }

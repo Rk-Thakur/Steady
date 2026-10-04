@@ -88,6 +88,7 @@ void main() {
           store.bills.firstWhere((b) => b.id == 'electric').amountCents,
           10900,
         );
+        await store.flush();
       },
     );
 
@@ -99,6 +100,7 @@ void main() {
         amountCents: 6000,
       );
       expect(store.billsThisCycle.where((b) => b.paid).length, paidBefore + 1);
+      await store.flush();
     });
   });
 
@@ -245,5 +247,44 @@ void main() {
         );
       },
     );
+  });
+
+  test('records each day\'s number for the summaries', () async {
+    var store = await monthlyUser();
+    final first = now;
+    expect(store.dailyNumbers[first], store.dailyNumber.dailyAllowanceCents);
+
+    // Income today raises today's number; the record follows it.
+    store.addEntry(pay(10000).copyWith(merchant: 'Gift'));
+    final raised = store.dailyNumber.dailyAllowanceCents;
+    expect(store.dailyNumbers[first], raised);
+
+    // A new day adds a record and keeps yesterday's, across a restart.
+    now = now.addDays(1);
+    store.onClockTick();
+    store = await restart(store);
+    expect(store.dailyNumbers[first], raised);
+    expect(store.dailyNumbers[now], store.dailyNumber.dailyAllowanceCents);
+  });
+
+  test('reminder settings are saved and come back after a restart', () async {
+    var store = await monthlyUser();
+    store.updateSettings(
+      store.settings.copyWith(
+        reminders: const ReminderSettings(
+          logSpends: false,
+          logAtMinutes: 13 * 60,
+          recaps: true,
+          quietFromMinutes: 0,
+        ),
+      ),
+    );
+    store = await restart(store);
+    final r = store.settings.reminders;
+    expect(r.logSpends, isFalse);
+    expect(r.logAtMinutes, 13 * 60);
+    expect(r.recaps, isTrue);
+    expect(r.quietFromMinutes, 0);
+    expect(r.billsDue, isTrue);
   });
 }

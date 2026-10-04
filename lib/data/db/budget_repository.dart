@@ -19,6 +19,7 @@ class BudgetSnapshot {
     required this.split,
     required this.sharedExpenses,
     required this.overspendDecisions,
+    this.dailyNumbers = const {},
   });
 
   /// Null until onboarding has saved settings (a fresh install).
@@ -32,6 +33,9 @@ class BudgetSnapshot {
   final ExpenseSplit? split;
   final List<SharedExpense> sharedExpenses;
   final Map<LocalDate, OverspendStrategy> overspendDecisions;
+
+  /// Each past day's number (its allowance before spending), as recorded.
+  final Map<LocalDate, int> dailyNumbers;
 
   bool get isFresh => settings == null;
 }
@@ -73,6 +77,7 @@ class BudgetRepository {
       _db.sharedExpenses,
     )..orderBy([(t) => OrderingTerm(expression: t.date)])).get();
     final decisions = await _db.select(_db.overspendDecisions).get();
+    final numbers = await _db.select(_db.dailyNumbers).get();
 
     return BudgetSnapshot(
       settings: settings == null ? null : _settingsFrom(settings),
@@ -115,6 +120,7 @@ class BudgetRepository {
           ),
       ],
       overspendDecisions: {for (final r in decisions) r.localDate: r.strategy},
+      dailyNumbers: {for (final r in numbers) r.localDate: r.allowanceCents},
     );
   });
 
@@ -139,6 +145,13 @@ class BudgetRepository {
           overspendStrategy: s.overspendStrategy,
           onboarded: Value(s.onboarded),
           lastBackupOn: Value(s.lastBackupOn),
+          remindLogSpends: Value(s.reminders.logSpends),
+          remindLogAt: Value(s.reminders.logAtMinutes),
+          remindBills: Value(s.reminders.billsDue),
+          remindLatePause: Value(s.reminders.latePause),
+          remindRecaps: Value(s.reminders.recaps),
+          remindBackup: Value(s.reminders.backupMonthly),
+          quietFrom: Value(s.reminders.quietFromMinutes),
         ),
       );
 
@@ -267,6 +280,7 @@ class BudgetRepository {
           dailySetAsideCents: g.dailySetAsideCents,
           targetDate: Value(g.targetDate),
           paused: Value(g.paused),
+          createdOn: Value(g.createdOn),
           sortOrder: sortOrder == null
               ? const Value.absent()
               : Value(sortOrder),
@@ -304,6 +318,15 @@ class BudgetRepository {
         OverspendDecisionsCompanion.insert(localDate: day, strategy: s),
       );
 
+  Future<void> saveDailyNumber(LocalDate day, int allowanceCents) => _db
+      .into(_db.dailyNumbers)
+      .insertOnConflictUpdate(
+        DailyNumbersCompanion.insert(
+          localDate: day,
+          allowanceCents: allowanceCents,
+        ),
+      );
+
   // ─── Bulk ────────────────────────────────────────────────────────────────
 
   /// Writes a whole snapshot (first run with demo data, restore from backup).
@@ -331,6 +354,9 @@ class BudgetRepository {
     for (final d in s.overspendDecisions.entries) {
       await saveOverspendDecision(d.key, d.value);
     }
+    for (final d in s.dailyNumbers.entries) {
+      await saveDailyNumber(d.key, d.value);
+    }
   });
 
   /// "Delete all my data".
@@ -355,6 +381,15 @@ class BudgetRepository {
     overspendStrategy: r.overspendStrategy,
     onboarded: r.onboarded,
     lastBackupOn: r.lastBackupOn,
+    reminders: ReminderSettings(
+      logSpends: r.remindLogSpends,
+      logAtMinutes: r.remindLogAt,
+      billsDue: r.remindBills,
+      latePause: r.remindLatePause,
+      recaps: r.remindRecaps,
+      backupMonthly: r.remindBackup,
+      quietFromMinutes: r.quietFrom,
+    ),
   );
 
   static BudgetCategory _categoryFrom(CategoryRow r) => BudgetCategory(
@@ -404,5 +439,6 @@ class BudgetRepository {
     dailySetAsideCents: r.dailySetAsideCents,
     targetDate: r.targetDate,
     paused: r.paused,
+    createdOn: r.createdOn,
   );
 }

@@ -1,16 +1,20 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/budget_store.dart';
 import '../data/store_scope.dart';
 import '../domain/models/settings.dart';
+import '../domain/reminders.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../ui/app_router.dart';
 import '../ui/onboarding/onboarding_screens.dart';
 import '../ui/routes.dart';
+import '../ui/shell/home_shell.dart';
+import 'notifications.dart';
 
 class SteadyApp extends StatefulWidget {
   const SteadyApp({
@@ -52,6 +56,63 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
     });
   }
 
+  // ─── Reminders ───────────────────────────────────────────────────────────
+
+  StreamSubscription<String>? _taps;
+  Timer? _rescheduleSoon;
+  List<PlannedNotification>? _scheduled;
+
+  /// A tapped notification's screen, held back while the lock is showing.
+  String? _pendingRoute;
+
+  /// Every change can move a reminder (a bill paid, a time changed), so the
+  /// plan is rebuilt shortly after any of them; unchanged plans are skipped.
+  void _queueReschedule() {
+    _rescheduleSoon?.cancel();
+    _rescheduleSoon = Timer(const Duration(seconds: 1), _reschedule);
+  }
+
+  void _reschedule() {
+    final store = widget.store;
+    final plan = store.settings.onboarded
+        ? store.plannedNotifications(DateTime.now())
+        : const <PlannedNotification>[];
+    if (listEquals(plan, _scheduled)) return;
+    _scheduled = plan;
+    Notifications.instance.replaceAll(plan).catchError((Object e) {
+      _scheduled = null; // try again next time
+      debugPrint('Steady: could not schedule reminders: $e');
+    });
+  }
+
+  void _openFromNotification(String route) {
+    if (!widget.store.settings.onboarded) return;
+    final nav = _navigator.currentState;
+    if (nav == null || _lockShowing) {
+      // Never above the lock screen: open it once unlocked.
+      _pendingRoute = route;
+      if (nav == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _openPending());
+      }
+      return;
+    }
+    switch (route) {
+      case Routes.home || Routes.bills:
+        HomeShell.tab.value = route == Routes.bills
+            ? ShellTab.bills
+            : ShellTab.today;
+        nav.popUntil((r) => r.isFirst);
+      default:
+        nav.pushNamed(route);
+    }
+  }
+
+  void _openPending() {
+    final route = _pendingRoute;
+    _pendingRoute = null;
+    if (route != null) _openFromNotification(route);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -63,12 +124,24 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
         s.pin != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showLock());
     }
+    final notifications = Notifications.instance;
+    if (notifications.enabled) {
+      widget.store.addListener(_queueReschedule);
+      _queueReschedule();
+      _taps = notifications.taps.listen(_openFromNotification);
+      notifications.launchRoute().then((route) {
+        if (route != null && mounted) _openFromNotification(route);
+      });
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _midnight?.cancel();
+    _rescheduleSoon?.cancel();
+    _taps?.cancel();
+    widget.store.removeListener(_queueReschedule);
     super.dispose();
   }
 
@@ -102,6 +175,7 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
     _lockShowing = true;
     await nav.pushNamed(Routes.lock);
     _lockShowing = false;
+    _openPending();
   }
 
   @override

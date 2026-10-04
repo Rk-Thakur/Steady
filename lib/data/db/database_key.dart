@@ -30,12 +30,13 @@ class SecureKeyVault implements KeyVault {
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock_this_device,
             ),
-            aOptions: AndroidOptions(
-              // Keystore-backed AES. Don't silently wipe keys on a read error:
-              // that would make the database unreadable for good.
-              keyCipherAlgorithm: KeyCipherAlgorithm.AES_GCM_NoPadding,
-              resetOnError: false,
-            ),
+            // The plugin's standard mode: AES-GCM data, key wrapped by the
+            // hardware Keystore. Not the AES-GCM *key* cipher: in v11 that
+            // mode goes through BiometricPrompt, which fails without
+            // USE_BIOMETRIC and would ask for a fingerprint on every launch.
+            // Don't silently wipe keys on a read error: that would make the
+            // database unreadable for good.
+            aOptions: AndroidOptions(resetOnError: false),
           );
 
   static const _databaseKey = 'steady.database_key.v1';

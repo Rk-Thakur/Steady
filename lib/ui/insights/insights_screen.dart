@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
+import '../../core/date_format.dart';
 import '../../core/money.dart';
-import '../../data/demo_insights.dart';
 import '../../data/store_scope.dart';
+import '../../domain/insights.dart';
+import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
@@ -21,12 +25,37 @@ class _InsightsScreenState extends State<InsightsScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final symbol = StoreScope.of(context).symbol;
+    final store = StoreScope.of(context);
+    final symbol = store.symbol;
     String whole(int cents) =>
         formatMoney(cents, symbol: symbol, showCents: false);
-    final maxMood = InsightsDemo.moods
-        .map((m) => m.cents)
-        .reduce((a, b) => a > b ? a : b);
+
+    // Rolling window ending today.
+    final insights = spendingInsights(
+      period: Period.lastDays(store.today, _month ? 30 : 7),
+      entries: store.entries,
+      categories: store.categories,
+    );
+    final topMood = insights.topMood;
+    // Biggest first; neutral (and untagged) always last.
+    final moods = [...Mood.values.where((m) => m != Mood.neutral)]
+      ..sort((a, b) => insights.byMood[b]!.compareTo(insights.byMood[a]!));
+    moods.add(Mood.neutral);
+    final maxMood = math.max(
+      1,
+      insights.byMood.values.fold(0, (a, b) => math.max(a, b)),
+    );
+    final trigger = insights.trigger;
+    final plannedFraction = insights.taggedCents == 0
+        ? 0.0
+        : insights.plannedCents / insights.taggedCents;
+    final plannedPct = (plannedFraction * 100).round();
+    final monthPeriod = summaryPeriodFor(
+      today: store.today,
+      isMonth: true,
+      weekStartsOn: store.settings.weekStartsOn,
+      entries: store.entries,
+    );
 
     return TabBody(
       gap: SteadySpace.s3,
@@ -56,7 +85,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             Expanded(
               child: _LinkCard(
                 title: 'Monthly summary',
-                subtitle: monthSummaryDemo.range,
+                subtitle: formatMonthYear(monthPeriod.start),
                 onTap: () =>
                     Navigator.of(context).pushNamed(Routes.summaryMonth),
               ),
@@ -78,7 +107,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                InsightsDemo.trigger,
+                trigger == null
+                    ? 'Add a mood when you log a spend, and what drives your spending shows up here.'
+                    : "When you're ${trigger.mood.label.toLowerCase()}, "
+                          '${trigger.category.toLowerCase()} costs you '
+                          '${whole(trigger.cents)} a ${_month ? 'month' : 'week'}.',
                 style: SteadyType.title.copyWith(
                   fontSize: 22,
                   height: 1.2,
@@ -97,7 +130,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 style: SteadyType.body.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 11),
-              for (final m in InsightsDemo.moods)
+              for (final mood in moods)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 11),
                   child: Row(
@@ -105,23 +138,23 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       SizedBox(
                         width: 84,
                         child: Text(
-                          m.mood,
+                          mood.label,
                           style: SteadyType.caption.copyWith(
-                            fontWeight: m.top
+                            fontWeight: mood == topMood
                                 ? FontWeight.w700
                                 : FontWeight.w600,
-                            color: m.neutral ? c.muted : c.ink,
+                            color: mood == Mood.neutral ? c.muted : c.ink,
                           ),
                         ),
                       ),
                       Expanded(
                         child: Bar(
-                          value: m.cents / maxMood,
+                          value: insights.byMood[mood]! / maxMood,
                           height: 12,
                           track: Colors.transparent,
-                          fill: m.top
+                          fill: mood == topMood
                               ? c.primary
-                              : m.neutral
+                              : mood == Mood.neutral
                               ? c.line
                               : c.billPending,
                         ),
@@ -129,13 +162,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       SizedBox(
                         width: 52,
                         child: Text(
-                          whole(m.cents),
+                          whole(insights.byMood[mood]!),
                           textAlign: TextAlign.right,
                           style: SteadyType.caption.copyWith(
-                            fontWeight: m.top
+                            fontWeight: mood == topMood
                                 ? FontWeight.w700
                                 : FontWeight.w500,
-                            color: m.neutral ? c.muted : c.ink,
+                            color: mood == Mood.neutral ? c.muted : c.ink,
                           ),
                         ),
                       ),
@@ -160,7 +193,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                     ),
                   ),
                   Text(
-                    '${whole(InsightsDemo.plannedTotalCents)} total',
+                    '${whole(insights.taggedCents)} total',
                     style: SteadyType.caption.copyWith(
                       fontWeight: FontWeight.w500,
                       color: c.muted,
@@ -169,31 +202,32 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 ],
               ),
               const SizedBox(height: 10),
-              SplitBar(
-                fraction: InsightsDemo.plannedFraction,
-                left: c.primary,
-                right: c.chartOver,
-              ),
-              const SizedBox(height: 10),
-              DefaultTextStyle(
-                style: SteadyType.caption.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: c.ink,
+              if (insights.taggedCents == 0)
+                Text(
+                  'Mark spends as planned or unplanned when you log them.',
+                  style: SteadyType.caption.copyWith(color: c.muted),
+                )
+              else ...[
+                SplitBar(
+                  fraction: plannedFraction,
+                  left: c.primary,
+                  right: c.chartOver,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _PctLabel(
-                      pct: (InsightsDemo.plannedFraction * 100).round(),
-                      label: 'planned',
-                    ),
-                    _PctLabel(
-                      pct: 100 - (InsightsDemo.plannedFraction * 100).round(),
-                      label: 'unplanned',
-                    ),
-                  ],
+                const SizedBox(height: 10),
+                DefaultTextStyle(
+                  style: SteadyType.caption.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: c.ink,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _PctLabel(pct: plannedPct, label: 'planned'),
+                      _PctLabel(pct: 100 - plannedPct, label: 'unplanned'),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -206,7 +240,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 style: SteadyType.body.copyWith(fontWeight: FontWeight.w700),
               ),
               Text(
-                '${whole(InsightsDemo.lateNightCents)} after 10 PM · ${InsightsDemo.lateNightCount} purchases',
+                insights.lateNightCount == 0
+                    ? 'Nothing logged after 10 PM.'
+                    : '${whole(insights.lateNightCents)} after 10 PM · '
+                          '${insights.lateNightCount} ${insights.lateNightCount == 1 ? 'purchase' : 'purchases'}',
                 style: SteadyType.caption.copyWith(
                   fontWeight: FontWeight.w500,
                   color: c.muted,

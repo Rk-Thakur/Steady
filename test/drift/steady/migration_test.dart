@@ -123,4 +123,14 @@ void main() {
       );
     },
   );
+
+  // A development build briefly shipped a v4 without goals.created_on (and
+  // the reminder columns were then added to v4 in place); v5 repairs both.
+  test('a v4 database missing goals.created_on still upgrades to v5', () async {
+    final schema = await verifier.schemaAt(4);
+    schema.rawDatabase.execute('ALTER TABLE goals DROP COLUMN created_on');
+    final db = SteadyDatabase(schema.newConnection());
+    await verifier.migrateAndValidate(db, 5);
+    await db.close();
+  });
 }

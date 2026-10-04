@@ -40,6 +40,66 @@ enum Currency {
   final String symbol;
 }
 
+/// P2 Reminders: local notifications, scheduled on the phone.
+@immutable
+class ReminderSettings {
+  const ReminderSettings({
+    this.logSpends = true,
+    this.logAtMinutes = 20 * 60 + 30,
+    this.billsDue = true,
+    this.latePause = true,
+    this.recaps = false,
+    this.backupMonthly = true,
+    this.quietFromMinutes = 23 * 60,
+  });
+
+  /// "Log your spends": a nudge at [logAtMinutes] if nothing is logged.
+  final bool logSpends;
+
+  /// Minutes after midnight, e.g. 1230 = 8:30 PM.
+  final int logAtMinutes;
+  final bool billsDue;
+  final bool latePause;
+  final bool recaps;
+
+  /// Backup & export: "A local notification on the 1st".
+  final bool backupMonthly;
+
+  /// Quiet hours run from here to 7 AM. 0 = midnight.
+  final int quietFromMinutes;
+
+  static const quietEndMinutes = 7 * 60;
+
+  bool get anyOn =>
+      logSpends || billsDue || latePause || recaps || backupMonthly;
+
+  ReminderSettings copyWith({
+    bool? logSpends,
+    int? logAtMinutes,
+    bool? billsDue,
+    bool? latePause,
+    bool? recaps,
+    bool? backupMonthly,
+    int? quietFromMinutes,
+  }) => ReminderSettings(
+    logSpends: logSpends ?? this.logSpends,
+    logAtMinutes: logAtMinutes ?? this.logAtMinutes,
+    billsDue: billsDue ?? this.billsDue,
+    latePause: latePause ?? this.latePause,
+    recaps: recaps ?? this.recaps,
+    backupMonthly: backupMonthly ?? this.backupMonthly,
+    quietFromMinutes: quietFromMinutes ?? this.quietFromMinutes,
+  );
+
+  static const off = ReminderSettings(
+    logSpends: false,
+    billsDue: false,
+    latePause: false,
+    recaps: false,
+    backupMonthly: false,
+  );
+}
+
 @immutable
 class AppSettings {
   const AppSettings({
@@ -56,6 +116,7 @@ class AppSettings {
     this.lastBackupOn,
     this.overspendStrategy = OverspendStrategy.spreadEvenly,
     this.onboarded = true,
+    this.reminders = const ReminderSettings(),
   });
 
   final Currency currency;
@@ -80,6 +141,7 @@ class AppSettings {
   final LocalDate? lastBackupOn;
   final OverspendStrategy overspendStrategy;
   final bool onboarded;
+  final ReminderSettings reminders;
 
   String get currencySymbol => currency.symbol;
 
@@ -97,6 +159,7 @@ class AppSettings {
     LocalDate? Function()? lastBackupOn,
     OverspendStrategy? overspendStrategy,
     bool? onboarded,
+    ReminderSettings? reminders,
   }) {
     return AppSettings(
       currency: currency ?? this.currency,
@@ -114,6 +177,7 @@ class AppSettings {
       lastBackupOn: lastBackupOn != null ? lastBackupOn() : this.lastBackupOn,
       overspendStrategy: overspendStrategy ?? this.overspendStrategy,
       onboarded: onboarded ?? this.onboarded,
+      reminders: reminders ?? this.reminders,
     );
   }
 }

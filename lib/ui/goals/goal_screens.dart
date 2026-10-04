@@ -228,6 +228,7 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
           savedCents: 0,
           dailySetAsideCents: perDay!,
           targetDate: store.today.addDays(_months * 30),
+          createdOn: store.today,
         ),
       );
       Navigator.of(context).pop();

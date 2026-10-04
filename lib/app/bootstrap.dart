@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'notifications.dart';
 import '../data/budget_store.dart';
 import '../data/db/budget_repository.dart';
 import '../data/db/database_key.dart';
@@ -31,9 +32,22 @@ class SteadyBootstrap extends StatefulWidget {
 }
 
 Future<BudgetStore> _openOnDevice() async {
+  // Reminders are a nice-to-have: never let them stop the app opening.
+  try {
+    await Notifications.instance.init();
+  } catch (e) {
+    debugPrint('Steady: notifications unavailable: $e');
+  }
   final db = await openSteadyDatabase();
   final repo = BudgetRepository(db);
-  final snapshot = await repo.load();
+  final BudgetSnapshot snapshot;
+  try {
+    snapshot = await repo.load();
+  } catch (_) {
+    // "Try again" opens a fresh connection; never leave two on one file.
+    await repo.close();
+    rethrow;
+  }
   final pinVault = SecureKeyVault.pin();
   final pin = await pinVault.read();
   return BudgetStore.fromSnapshot(

@@ -12,4 +12,8 @@ class StoreScope extends InheritedNotifier<BudgetStore> {
 
   static BudgetStore of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+
+  /// The store without subscribing to changes (for callbacks).
+  static BudgetStore read(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 }
