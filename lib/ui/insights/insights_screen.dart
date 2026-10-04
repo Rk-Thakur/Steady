@@ -64,7 +64,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
           'Insights',
           trailing: Segmented<bool>(
             expand: false,
-            itemHeight: 36,
+            itemHeight: 40,
             options: const [false, true],
             selected: _month,
             labelOf: (m) => m ? 'Month' : 'Week',

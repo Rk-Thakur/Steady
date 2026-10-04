@@ -513,7 +513,9 @@ class SteadyChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Semantics(
+    return _TouchPad(
+      height: height,
+      onTap: onTap,
       button: true,
       selected: selected,
       child: Material(
@@ -574,7 +576,8 @@ class ChipGroup<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final wrap = Wrap(
       spacing: SteadySpace.s2,
-      runSpacing: SteadySpace.s2,
+      // Chips carry 4px of touch padding above and below: still an 8px gap.
+      runSpacing: 0,
       children: [
         for (final o in options)
           SteadyChip(
@@ -606,27 +609,69 @@ class AddChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
-      color: c.raised,
-      shape: StadiumBorder(side: BorderSide(color: c.dashed)),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Center(
-            widthFactor: 1,
-            child: Text(
-              label,
-              style: SteadyType.body.copyWith(
-                fontSize: 14,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: c.primary,
+    return _TouchPad(
+      height: 40,
+      onTap: onTap,
+      button: true,
+      child: Material(
+        color: c.raised,
+        shape: StadiumBorder(side: BorderSide(color: c.dashed)),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Center(
+              widthFactor: 1,
+              child: Text(
+                label,
+                style: SteadyType.body.copyWith(
+                  fontSize: 14,
+                  height: 1,
+                  fontWeight: FontWeight.w700,
+                  color: c.primary,
+                ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Grows a pill-shaped control's tappable area to [SteadySize.minTouchTarget]
+/// with invisible padding above and below; the visible pill stays [height].
+/// Wraps that hold these use 4px less run spacing so the look is unchanged.
+class _TouchPad extends StatelessWidget {
+  const _TouchPad({
+    required this.height,
+    required this.onTap,
+    required this.child,
+    this.button = false,
+    this.selected,
+  });
+
+  final double height;
+  final VoidCallback onTap;
+  final Widget child;
+  final bool button;
+  final bool? selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = (SteadySize.minTouchTarget - height).clamp(0.0, 24.0) / 2;
+    return Semantics(
+      button: button,
+      selected: selected,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: pad),
+          child: child,
         ),
       ),
     );
@@ -657,28 +702,32 @@ class Segmented<T> extends StatelessWidget {
     final c = context.colors;
     Widget item(T o) {
       final on = o == selected;
+      // The whole track height is tappable; the pill is drawn inside it.
       final child = Semantics(
         button: true,
         selected: on,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => onSelected(o),
-          child: AnimatedContainer(
-            duration: SteadyMotion.reduced,
-            height: itemHeight,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: on ? c.segmentSelected : Colors.transparent,
-              borderRadius: BorderRadius.circular(SteadyRadius.pill),
-            ),
-            child: Text(
-              labelOf(o),
-              style: SteadyType.body.copyWith(
-                fontSize: 14,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: on ? c.ink : c.muted,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: SteadySpace.s1),
+            child: AnimatedContainer(
+              duration: SteadyMotion.reduced,
+              height: itemHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: on ? c.segmentSelected : Colors.transparent,
+                borderRadius: BorderRadius.circular(SteadyRadius.pill),
+              ),
+              child: Text(
+                labelOf(o),
+                style: SteadyType.body.copyWith(
+                  fontSize: 14,
+                  height: 1,
+                  fontWeight: FontWeight.w700,
+                  color: on ? c.ink : c.muted,
+                ),
               ),
             ),
           ),
@@ -688,7 +737,7 @@ class Segmented<T> extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.all(SteadySpace.s1),
+      padding: const EdgeInsets.symmetric(horizontal: SteadySpace.s1),
       decoration: BoxDecoration(
         color: c.segmentTrack,
         borderRadius: BorderRadius.circular(SteadyRadius.pill),
@@ -777,33 +826,37 @@ class SwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return MergeSemantics(
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: SteadyType.body.copyWith(
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                  ),
-                ),
-                if (subtitle != null)
+      child: ConstrainedBox(
+        // The merged row is the touch target for screen readers.
+        constraints: const BoxConstraints(minHeight: SteadySize.minTouchTarget),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    subtitle!,
-                    style: SteadyType.caption.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: c.muted,
+                    title,
+                    style: SteadyType.body.copyWith(
+                      fontWeight: FontWeight.w700,
+                      height: 1.3,
                     ),
                   ),
-              ],
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      style: SteadyType.caption.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: c.muted,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: SteadySpace.s3),
-          SteadySwitch(value: value, onChanged: onChanged, label: title),
-        ],
+            const SizedBox(width: SteadySpace.s3),
+            SteadySwitch(value: value, onChanged: onChanged, label: title),
+          ],
+        ),
       ),
     );
   }

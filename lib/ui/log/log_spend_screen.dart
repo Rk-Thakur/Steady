@@ -172,7 +172,7 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
             ),
             Segmented<bool>(
               expand: false,
-              itemHeight: 36,
+              itemHeight: 40,
               options: const [true, false],
               selected: _planned,
               labelOf: (p) => p ? 'Yes' : 'No',

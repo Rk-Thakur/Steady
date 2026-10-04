@@ -148,7 +148,9 @@ class _BillsScreenState extends State<BillsScreen> {
                     Navigator.of(context)
                         .pushNamed(Routes.billEdit, arguments: upcoming[i].id),
                 child: ValueRow(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 13,
+                  ), // 48pt row: touch target
                   label: upcoming[i].name,
                   labelWidget: _BillLabel(
                     bill: upcoming[i],

@@ -625,7 +625,7 @@ class _OnbMoneyScreenState extends State<OnbMoneyScreen> {
               const SizedBox(height: SteadySpace.s3),
               Wrap(
                 spacing: SteadySpace.s2,
-                runSpacing: SteadySpace.s2,
+                runSpacing: 0, // chips carry their own touch padding
                 children: [
                   AddChip(
                     label: '+ Phone',
@@ -690,14 +690,11 @@ class OnbRevealScreen extends StatelessWidget {
         .where((g) => !g.paused && !g.isReached)
         .firstOrNull;
 
-    Widget link(String label, String route, [Object? args]) => GestureDetector(
-      onTap: () => Navigator.of(context).pushNamed(route, arguments: args),
-      child: Text(
-        ' $label',
-        style: SteadyType.caption.copyWith(
-          fontWeight: FontWeight.w700,
-          color: c.primary,
-        ),
+    Widget link(String label, String route, [Object? args]) => Padding(
+      padding: const EdgeInsets.only(left: SteadySpace.s1),
+      child: LinkText(
+        label,
+        onTap: () => Navigator.of(context).pushNamed(route, arguments: args),
       ),
     );
 
@@ -731,32 +728,32 @@ class OnbRevealScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    formatMoney(
-                      n.dailyAllowanceCents,
-                      symbol: symbol,
-                      showCents: false,
+              // One text so "a day" wraps under the amount with large text.
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: formatMoney(
+                        n.dailyAllowanceCents,
+                        symbol: symbol,
+                        showCents: false,
+                      ),
+                      style: SteadyType.amountXl.copyWith(
+                        fontSize: 60,
+                        letterSpacing: -2,
+                        color: c.highlight,
+                      ),
                     ),
-                    style: SteadyType.amountXl.copyWith(
-                      fontSize: 60,
-                      letterSpacing: -2,
-                      color: c.highlight,
+                    TextSpan(
+                      text: '  a day',
+                      style: SteadyType.body.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: c.onHeroMuted,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'a day',
-                    style: SteadyType.body.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: c.onHeroMuted,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -783,9 +780,12 @@ class OnbRevealScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Text(
-                    '$billCount ${billCount == 1 ? 'bill' : 'bills'} before payday',
-                    style: SteadyType.body.copyWith(fontSize: 15),
+                  // Wraps with large text instead of pushing "Review" off.
+                  Flexible(
+                    child: Text(
+                      '$billCount ${billCount == 1 ? 'bill' : 'bills'} before payday',
+                      style: SteadyType.body.copyWith(fontSize: 15),
+                    ),
                   ),
                   link('Review', Routes.bills),
                 ],

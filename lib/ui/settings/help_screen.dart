@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/support.dart';
 import '../../theme/tokens.dart';
 import '../widgets/kit.dart';
 
@@ -128,13 +129,22 @@ class _HelpScreenState extends State<HelpScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              // Needs a mailto: launcher (e.g. url_launcher) and a real support address.
               SteadyButton(
                 'Open email app',
                 height: 48,
-                onPressed: () => setState(
-                  () => _toast = 'Your email app would open here. Add the support address before release.',
-                ),
+                onPressed: () async {
+                  final result = await openFeedbackEmail();
+                  if (!mounted) return;
+                  setState(
+                    () => _toast = switch (result) {
+                      FeedbackResult.opened => null,
+                      FeedbackResult.copied =>
+                        'No email app found. Our address is copied: $supportEmail',
+                      FeedbackResult.notSetUp =>
+                        "Feedback email isn't set up yet.",
+                    },
+                  );
+                },
               ),
             ],
           ),

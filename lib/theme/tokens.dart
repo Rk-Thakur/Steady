@@ -39,7 +39,8 @@ abstract final class SteadyRadius {
 }
 
 abstract final class SteadySize {
-  static const double minTouchTarget = 44;
+  /// Smallest tappable area: Android's 48dp (also covers iOS's 44pt).
+  static const double minTouchTarget = 48;
   static const double buttonLarge = 52;
   static const double buttonCompact = 44;
   static const double iconButton = 44;

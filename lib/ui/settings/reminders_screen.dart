@@ -106,7 +106,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: SteadySpace.s2,
-                      runSpacing: SteadySpace.s2,
+                      runSpacing: 0, // chips carry their own touch padding
                       children: [
                         for (final t in times)
                           SteadyChip(

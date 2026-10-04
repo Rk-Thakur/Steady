@@ -90,8 +90,8 @@ Future<Uint8List> buildSummaryPdf(SummaryReport r, ReportFonts fonts) {
     child: pw.SvgImage(
       svg:
           '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-          '<path d="M3,15 C5,9 7,9 9,13 C11,17 13,17 15,11 C17,6 19,7 21,10" '
-          'fill="none" stroke="#C9F26B" stroke-width="2.6" '
+          '<path d="M3,16 C6,16 6,8 9,8 C12,8 12,16 15,16 C18,16 18,8 21,8" '
+          'fill="none" stroke="#C9F26B" stroke-width="2.4" '
           'stroke-linecap="round" stroke-linejoin="round"/></svg>',
     ),
   );

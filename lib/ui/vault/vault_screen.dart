@@ -77,27 +77,27 @@ class _VaultScreenState extends State<VaultScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    whole(steady),
-                    style: SteadyType.amountXl.copyWith(
-                      fontSize: 48,
-                      color: c.highlight,
+              // One text so "/ week" wraps under the amount with large text.
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: whole(steady),
+                      style: SteadyType.amountXl.copyWith(
+                        fontSize: 48,
+                        color: c.highlight,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '/ week',
-                    style: SteadyType.body.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: c.onInverseMuted,
+                    TextSpan(
+                      text: '  / week',
+                      style: SteadyType.body.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: c.onInverseMuted,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               Text(

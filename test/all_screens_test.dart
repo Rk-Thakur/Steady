@@ -108,4 +108,41 @@ void main() {
       }
     }
   }
+
+  // Large text (iOS Larger Text / Android font size): every screen must lay
+  // out without overflowing.
+  for (final scale in [1.3, 2.0]) {
+    for (final (width, height) in [(390.0, 844.0), (375.0, 667.0)]) {
+      for (final (route, argsOf) in routes) {
+        testWidgets(
+          'large text ×$scale · $route · ${width.toInt()}×${height.toInt()}',
+          (tester) async {
+            tester.view.physicalSize = Size(width, height);
+            tester.view.devicePixelRatio = 1;
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            addTearDown(tester.view.reset);
+            addTearDown(
+              tester.platformDispatcher.clearTextScaleFactorTestValue,
+            );
+
+            final store = BudgetStore.sample(clock: () => oct2);
+            await tester.pumpWidget(
+              SteadyApp(store: store, initialRoute: Routes.home),
+            );
+            await tester.pump();
+            if (route != Routes.home) {
+              tester
+                  .state<NavigatorState>(find.byType(Navigator).first)
+                  .pushNamed(route, arguments: argsOf(store));
+            }
+            await tester.pump(const Duration(milliseconds: 400));
+            await tester.pump(const Duration(milliseconds: 400));
+            expect(tester.takeException(), isNull);
+            await tester.pump(const Duration(seconds: 2));
+            await tester.pump(const Duration(milliseconds: 400));
+          },
+        );
+      }
+    }
+  }
 }
