@@ -167,10 +167,18 @@ class _BackupScreenState extends State<BackupScreen> {
                 _show(name == null ? null : 'Saved $name.');
               },
             ),
-            const NavRow(
+            NavRow(
               label: 'Export monthly report (PDF)',
-              subtitle: 'Summary, categories and bills',
-              value: 'Coming soon',
+              subtitle: 'In, spent, saved, categories and goals',
+              onTap: () async {
+                try {
+                  final name = await exportPdfFlow(store, month: true);
+                  _show(name == null ? null : 'Saved $name.');
+                } catch (e) {
+                  debugPrint('Steady: PDF report failed: $e');
+                  _show("Couldn't make the report. Nothing was changed.");
+                }
+              },
             ),
             NavRow(
               label: 'Restore from backup file',

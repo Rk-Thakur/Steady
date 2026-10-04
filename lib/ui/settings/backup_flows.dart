@@ -11,6 +11,8 @@ import '../../data/backup/csv_export.dart';
 import '../../data/budget_store.dart';
 import '../../data/db/budget_repository.dart';
 import '../../theme/tokens.dart';
+import '../insights/summary_pdf.dart';
+import '../insights/summary_report.dart';
 import '../widgets/kit.dart';
 
 /// The system Save and Open dialogs. Only ever opened by the user (Handoff 4:
@@ -106,6 +108,21 @@ Future<String?> exportCsvFlow(BudgetStore store) async {
     mimeType: 'text/csv',
   );
   return saved ? name : null;
+}
+
+// ─── PDF report ────────────────────────────────────────────────────────────
+
+/// The weekly or monthly summary as a PDF, made on this phone, then the
+/// system Save sheet. Returns the file name, or null if the user cancelled.
+Future<String?> exportPdfFlow(BudgetStore store, {required bool month}) async {
+  final report = SummaryReport.fromStore(store, month: month);
+  final bytes = await buildSummaryPdf(report, await ReportFonts.load());
+  final saved = await BackupFileIo.instance.save(
+    fileName: report.pdfFileName,
+    bytes: bytes,
+    mimeType: 'application/pdf',
+  );
+  return saved ? report.pdfFileName : null;
 }
 
 // ─── Restore ───────────────────────────────────────────────────────────────

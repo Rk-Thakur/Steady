@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../core/date_format.dart';
 import '../../core/money.dart';
 import '../../data/store_scope.dart';
 import '../../domain/insights.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
+import '../../data/budget_store.dart';
+import '../settings/backup_flows.dart';
 import '../widgets/kit.dart';
+import 'summary_report.dart';
 
 /// V5 Weekly summary / V6 Monthly summary.
 class SummaryScreen extends StatefulWidget {
@@ -20,6 +22,29 @@ class SummaryScreen extends StatefulWidget {
 class _SummaryScreenState extends State<SummaryScreen> {
   late bool _month = widget.month;
   String? _toast;
+  bool _savingPdf = false;
+
+  /// Made on this phone, then the system Save sheet (nothing is sent).
+  Future<void> _savePdf(BudgetStore store) async {
+    setState(() {
+      _savingPdf = true;
+      _toast = null;
+    });
+    String? message;
+    try {
+      final name = await exportPdfFlow(store, month: _month);
+      if (name != null) message = 'Saved $name.';
+    } catch (e) {
+      debugPrint('Steady: PDF report failed: $e');
+      message = "Couldn't make the PDF. Try again.";
+    }
+    if (mounted) {
+      setState(() {
+        _savingPdf = false;
+        _toast = message;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,68 +52,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final store = StoreScope.of(context);
     final symbol = store.symbol;
     String m(int cents) => formatMoney(cents, symbol: symbol);
-    String whole(int cents) =>
-        formatMoney(cents, symbol: symbol, showCents: false);
 
-    final weekStartsOn = store.settings.weekStartsOn;
-    final period = summaryPeriodFor(
-      today: store.today,
-      isMonth: _month,
-      weekStartsOn: weekStartsOn,
-      entries: store.entries,
-    );
-    PeriodSummary summaryOf(Period p) => summarize(
-      period: p,
-      isMonth: _month,
-      today: store.today,
-      entries: store.entries,
-      categories: store.categories,
-      goals: store.goals,
-      dailyNumbers: store.dailyNumbers,
-      fallbackPaceCents: store.dailyNumber.dailyAllowanceCents,
-    );
-    final s = summaryOf(period);
-    final prev = summaryOf(period.previous);
-    final current = period.contains(store.today);
-    final vs = _month
-        ? 'vs ${formatMonthYear(prev.period.start).substring(0, 3)}'
-        : 'vs last week';
-
-    // "+$120 vs last week": green when the change is good for you.
-    _Note note(
-      int now,
-      int before, {
-      bool lowerIsBetter = false,
-      bool percent = false,
-    }) {
-      if (!prev.hasEntries) return _Note('Nothing to compare yet', c.muted);
-      final diff = now - before;
-      if (diff == 0) return _Note('Same as before', c.muted);
-      final text = percent && before > 0
-          ? '${diff > 0 ? '+' : '−'}${(diff.abs() * 100 / before).round()}% $vs'
-          : '${formatMoney(diff, symbol: symbol, showCents: false, signed: true)} $vs';
-      final good = lowerIsBetter ? diff < 0 : diff > 0;
-      return _Note(text, good ? c.positive : c.warningFg);
-    }
-
-    final inNote = note(s.inCents, prev.inCents);
-    final spentNote = note(
-      s.spentCents,
-      prev.spentCents,
-      lowerIsBetter: true,
-      percent: true,
-    );
-    final savedNote = note(s.savedCents, prev.savedCents);
-
-    final range = _month
-        ? '${formatMonthYear(period.start)}${current ? ' so far' : ''}'
-        : '${formatShortDay(period.start)} – '
-              '${current ? 'today' : formatShortDay(period.end)}';
-    final worthALook = _worthALook(s, whole);
+    final r = SummaryReport.fromStore(store, month: _month);
+    final s = r.summary;
+    _Note note(ReportNote n) => _Note(n.text, switch (n.tone) {
+      NoteTone.good => c.positive,
+      NoteTone.bad => c.warningFg,
+      NoteTone.neutral => c.muted,
+    });
+    final worthALook = r.worthALook;
 
     return SteadyPage(
-      title: _month ? 'Monthly summary' : 'Weekly summary',
-      subtitle: range,
+      title: r.title,
+      subtitle: r.range,
       gap: 14,
       children: [
         Segmented<bool>(
@@ -108,7 +84,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 child: _Stat(
                   label: 'Money in',
                   value: m(s.inCents),
-                  note: inNote,
+                  note: note(r.inNote),
                 ),
               ),
               const SizedBox(width: SteadySpace.s2),
@@ -116,7 +92,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 child: _Stat(
                   label: 'Spent',
                   value: m(s.spentCents),
-                  note: spentNote,
+                  note: note(r.spentNote),
                 ),
               ),
               const SizedBox(width: SteadySpace.s2),
@@ -124,7 +100,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 child: _Stat(
                   label: 'Saved',
                   value: m(s.savedCents),
-                  note: savedNote,
+                  note: note(r.savedNote),
                 ),
               ),
             ],
@@ -146,13 +122,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     // Negative when bills or spending were paid from money
                     // that came in before this period: say so plainly.
                     Text(
-                      s.leftOverCents < 0
-                          ? 'More went out than came in'
-                          : 'Left over after spending & saving',
+                      r.leftOverLabel,
                       style: SteadyType.caption.copyWith(color: c.onHeroMuted),
                     ),
                     Text(
-                      m(s.leftOverCents.abs()),
+                      r.leftOver,
                       style: SteadyType.title.copyWith(
                         fontSize: 30,
                         color: s.leftOverCents < 0 ? c.onHero : c.highlight,
@@ -172,9 +146,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     ),
                   ),
                   Text(
-                    s.daysCounted == 0
-                        ? '—'
-                        : '${s.daysUnder} of ${s.daysCounted}',
+                    r.daysUnder,
                     style: SteadyType.heading.copyWith(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -194,14 +166,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      _month ? 'Spending by week' : 'Spending by day',
+                      r.chartTitle,
                       style: SteadyType.body.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                   Text(
-                    '– – ${whole(s.paceCents)} ${_month ? 'weekly pace' : 'daily number'}',
+                    '– – ${r.chartKey}',
                     style: SteadyType.caption.copyWith(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -304,7 +276,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   padding: const EdgeInsets.only(top: 10),
                   label: sv.name,
                   labelWidget: NameMeta(name: sv.name, meta: 'Daily set-aside'),
-                  value: formatMoney(sv.cents, symbol: symbol, signed: true),
+                  value: formatMoney(sv.cents, symbol: r.symbol, signed: true),
                   valueColor: c.positive,
                 ),
             ],
@@ -329,18 +301,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
               onPressed: () => Navigator.of(context).pushNamed(Routes.history),
             ),
             SteadyButton(
-              'Save as PDF',
+              _savingPdf ? 'Making PDF…' : 'Save as PDF',
               height: 48,
-              onPressed: () =>
-                  setState(() => _toast = 'PDF reports are coming soon.'),
+              onPressed: _savingPdf ? null : () => _savePdf(store),
             ),
           ],
         ),
         Text(
-          _month
-              ? 'Calculated on this phone from your own entries.'
-              : 'Calculated on this phone from your own entries. '
-                    'Week starts ${weekdayName(weekStartsOn)}; change it in Profile.',
+          r.footer,
           textAlign: TextAlign.center,
           style: SteadyType.caption.copyWith(
             fontSize: 12,
@@ -351,29 +319,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ],
     );
   }
-}
-
-/// "Worth a look": the biggest day (or week) and what drove it.
-String? _worthALook(PeriodSummary s, String Function(int) whole) {
-  final b = s.biggest;
-  if (b == null) return null;
-  final what = s.isMonth
-      ? 'Week ${b.bar.label.substring(3)}'
-      : weekdayName(b.bar.start.weekday);
-  final drivers = [
-    if (b.topCategory != null) 'mostly ${b.topCategory!.toLowerCase()}',
-    if (b.topMood != null) 'while ${b.topMood!.label.toLowerCase()}',
-  ].join(' ');
-  final tail = drivers.isEmpty
-      ? '.'
-      : '. ${drivers[0].toUpperCase()}${drivers.substring(1)}.';
-  if (b.overByCents > 0) {
-    return s.isMonth
-        ? '$what ran over pace by ${whole(b.overByCents)}$tail'
-        : '$what went ${whole(b.overByCents)} over your number$tail';
-  }
-  return '$what was your biggest ${s.isMonth ? 'week' : 'day'}: '
-      '${whole(b.bar.cents)}${drivers.isEmpty ? '' : ', $drivers'}.';
 }
 
 class _Note {

@@ -162,4 +162,35 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Backup: export the monthly report as a PDF', (tester) async {
+    await openBackupScreen(tester);
+    await tester.ensureVisible(find.text('Export monthly report (PDF)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export monthly report (PDF)'));
+    await letCryptoRun(tester); // font loading and PDF building are async
+    final name = io.saved.keys.single;
+    expect(name, startsWith('steady-month-2026-'));
+    expect(String.fromCharCodes(io.saved[name]!.take(5)), '%PDF-');
+    expect(find.text('Saved $name.', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('Weekly summary: Save as PDF', (tester) async {
+    await openBackupScreen(tester);
+    tester
+        .state<NavigatorState>(find.byType(Navigator).first)
+        .pushNamed(Routes.summaryWeek);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Save as PDF'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save as PDF'));
+    await letCryptoRun(tester);
+    final name = io.saved.keys.single;
+    expect(name, startsWith('steady-week-'));
+    expect(find.text('Saved $name.', skipOffstage: false), findsOneWidget);
+  });
 }
