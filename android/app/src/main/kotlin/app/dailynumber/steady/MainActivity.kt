@@ -1,4 +1,4 @@
-package com.example.steady
+package app.dailynumber.steady
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

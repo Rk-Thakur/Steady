@@ -4,7 +4,7 @@
     <!-- App lock: unlock with fingerprint or face. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
-        android:label="steady"
+        android:label="Steady"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
