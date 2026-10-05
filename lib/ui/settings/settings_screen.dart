@@ -106,11 +106,12 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.people_outline_rounded,
               tone: BannerTone.warning,
               label: 'Split expenses',
-              value: store.split == null
-                  ? 'Off'
-                  : 'With ${store.split!.personName}',
-              onTap: () =>
-                  go(store.split == null ? Routes.splitSetup : Routes.splits),
+              value: switch (store.splits.groups.length) {
+                0 => 'Off',
+                1 => '1 group',
+                final n => '$n groups',
+              },
+              onTap: () => go(Routes.splits),
             ),
           ],
         ),
@@ -121,7 +122,7 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.notifications_none_rounded,
               tone: BannerTone.info,
               label: 'Reminders',
-              value: '3 on',
+              value: _remindersOn(s) == 0 ? 'Off' : '${_remindersOn(s)} on',
               onTap: () => go(Routes.reminders),
             ),
             NavRow(
@@ -311,3 +312,8 @@ class _BiometricRowState extends State<_BiometricRow> {
     },
   );
 }
+
+/// Reminders that can actually fire: the payday one needs a fixed payday.
+int _remindersOn(AppSettings s) =>
+    s.reminders.onCount -
+    (s.reminders.payday && s.payFrequency == PayFrequency.varies ? 1 : 0);

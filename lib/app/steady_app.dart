@@ -103,7 +103,7 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
             : ShellTab.today;
         nav.popUntil((r) => r.isFirst);
       default:
-        nav.pushNamed(route);
+        openRouteLink(nav, route);
     }
   }
 

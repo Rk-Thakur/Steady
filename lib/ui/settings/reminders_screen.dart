@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/notifications.dart';
 import '../../core/date_format.dart';
+import '../../core/money.dart';
 import '../../data/store_scope.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
@@ -17,6 +18,7 @@ class RemindersScreen extends StatefulWidget {
 
 class _RemindersScreenState extends State<RemindersScreen> {
   static const _presetTimes = [13 * 60, 20 * 60 + 30];
+  static const _paydayPresets = [8 * 60, 9 * 60];
   static const _quietOptions = [23 * 60, 22 * 60, 0];
 
   /// Null until asked; false shows how to turn notifications back on.
@@ -44,26 +46,45 @@ class _RemindersScreenState extends State<RemindersScreen> {
     if (after.anyOn && !before.anyOn || _allowed == null) _askPermission();
   }
 
-  Future<void> _pickTime(int current) async {
+  Future<void> _pickTime(
+    int current,
+    ReminderSettings Function(ReminderSettings r, int minutes) apply,
+  ) async {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
     );
     if (picked != null) {
-      _update(
-        (r) => r.copyWith(logAtMinutes: picked.hour * 60 + picked.minute),
-      );
+      _update((r) => apply(r, picked.hour * 60 + picked.minute));
     }
   }
+
+  /// Preset chips, the current time if it isn't one of them, and "+ Time".
+  Widget _times({
+    required List<int> presets,
+    required int selected,
+    required ValueChanged<int> onSelected,
+    required VoidCallback onPick,
+  }) => Wrap(
+    spacing: SteadySpace.s2,
+    runSpacing: 0, // chips carry their own touch padding
+    children: [
+      for (final t in [...presets, if (!presets.contains(selected)) selected])
+        SteadyChip(
+          label: _timeLabel(t),
+          selected: t == selected,
+          onTap: () => onSelected(t),
+        ),
+      AddChip(label: '+ Time', onTap: onPick),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final r = StoreScope.of(context).settings.reminders;
-    final times = [
-      ..._presetTimes,
-      if (!_presetTimes.contains(r.logAtMinutes)) r.logAtMinutes,
-    ];
+    final store = StoreScope.of(context);
+    final r = store.settings.reminders;
+    final regularPay = store.settings.payFrequency != PayFrequency.varies;
     final quietIndex = _quietOptions.indexOf(r.quietFromMinutes);
     Widget row(Widget child) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -104,22 +125,46 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   ),
                   if (r.logSpends) ...[
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: SteadySpace.s2,
-                      runSpacing: 0, // chips carry their own touch padding
-                      children: [
-                        for (final t in times)
-                          SteadyChip(
-                            label: _timeLabel(t),
-                            selected: t == r.logAtMinutes,
-                            onTap: () =>
-                                _update((r) => r.copyWith(logAtMinutes: t)),
-                          ),
-                        AddChip(
-                          label: '+ Time',
-                          onTap: () => _pickTime(r.logAtMinutes),
-                        ),
-                      ],
+                    _times(
+                      presets: _presetTimes,
+                      selected: r.logAtMinutes,
+                      onSelected: (t) =>
+                          _update((r) => r.copyWith(logAtMinutes: t)),
+                      onPick: () => _pickTime(
+                        r.logAtMinutes,
+                        (r, t) => r.copyWith(logAtMinutes: t),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SwitchRow(
+                    title: 'Payday reminder',
+                    subtitle: regularPay
+                        ? 'On payday (${formatShortDay(store.nextPayday)}), '
+                              'to log your pay and start a new cycle'
+                        : "Your pay varies, so there's no fixed payday",
+                    value: regularPay && r.payday,
+                    onChanged: regularPay
+                        ? (v) => _update((r) => r.copyWith(payday: v))
+                        : null,
+                  ),
+                  if (regularPay && r.payday) ...[
+                    const SizedBox(height: 10),
+                    _times(
+                      presets: _paydayPresets,
+                      selected: r.paydayAtMinutes,
+                      onSelected: (t) =>
+                          _update((r) => r.copyWith(paydayAtMinutes: t)),
+                      onPick: () => _pickTime(
+                        r.paydayAtMinutes,
+                        (r, t) => r.copyWith(paydayAtMinutes: t),
+                      ),
                     ),
                   ],
                 ],
@@ -148,6 +193,25 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 subtitle: 'Sunday evening, and the 1st of each month',
                 value: r.recaps,
                 onChanged: (v) => _update((r) => r.copyWith(recaps: v)),
+              ),
+            ),
+            row(
+              SwitchRow(
+                title: 'Money owed to you',
+                subtitle:
+                    'When someone owes you '
+                    '${formatMoney(ReminderSettings.debtMinimumCents, symbol: store.symbol, showCents: false)}+ '
+                    'for a week, then weekly',
+                value: r.debtsOwedToYou,
+                onChanged: (v) => _update((r) => r.copyWith(debtsOwedToYou: v)),
+              ),
+            ),
+            row(
+              SwitchRow(
+                title: 'Money you owe',
+                subtitle: 'A weekly nudge to pay people back',
+                value: r.debtsYouOwe,
+                onChanged: (v) => _update((r) => r.copyWith(debtsYouOwe: v)),
               ),
             ),
           ],

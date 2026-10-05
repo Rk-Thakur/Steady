@@ -86,6 +86,7 @@ class NotificationsScreen extends StatelessWidget {
     ReminderKind.weeklyRecap => Icons.bar_chart_rounded,
     ReminderKind.monthlyRecap => Icons.calendar_month_outlined,
     ReminderKind.backup => Icons.save_alt_rounded,
+    ReminderKind.debt => Icons.people_outline_rounded,
   };
 
   static BannerTone _tone(ReminderKind kind) => switch (kind) {
@@ -93,6 +94,7 @@ class NotificationsScreen extends StatelessWidget {
     ReminderKind.payday || ReminderKind.billDue => BannerTone.primary,
     ReminderKind.latePause || ReminderKind.backup => BannerTone.warning,
     ReminderKind.weeklyRecap || ReminderKind.monthlyRecap => BannerTone.neutral,
+    ReminderKind.debt => BannerTone.warning,
   };
 }
 
@@ -123,7 +125,7 @@ class _Item extends StatelessWidget {
           route,
           arguments: StoreScope.of(context).goals.firstOrNull?.id,
         ),
-        _ => Navigator.of(context).pushNamed(route),
+        _ => openRouteLink(Navigator.of(context), route),
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14),

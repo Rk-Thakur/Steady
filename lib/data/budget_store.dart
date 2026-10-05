@@ -9,6 +9,7 @@ import '../domain/cycle.dart';
 import '../domain/daily_number.dart';
 import '../domain/models/models.dart';
 import '../domain/schedule.dart';
+import '../domain/split_math.dart';
 import 'db/budget_repository.dart';
 import 'db/database_key.dart';
 
@@ -28,8 +29,7 @@ class BudgetStore extends ChangeNotifier {
     required List<Bill> bills,
     required List<Goal> goals,
     required this._vault,
-    this._split,
-    List<SharedExpense> sharedExpenses = const [],
+    this._splits = SplitBook.empty,
     Map<LocalDate, OverspendDecision> overspendDecisions = const {},
     Map<LocalDate, int> dailyNumbers = const {},
     LocalDate Function()? clock,
@@ -39,7 +39,6 @@ class BudgetStore extends ChangeNotifier {
        _entries = List.of(entries),
        _bills = List.of(bills),
        _goals = List.of(goals),
-       _shared = List.of(sharedExpenses),
        _overspendHandled = Map.of(overspendDecisions),
        _dailyNumbers = Map.of(dailyNumbers),
        _clock = clock ?? LocalDate.today,
@@ -72,8 +71,7 @@ class BudgetStore extends ChangeNotifier {
       bills: s.bills,
       goals: s.goals,
       vault: s.vault!,
-      split: s.split,
-      sharedExpenses: s.sharedExpenses,
+      splits: s.splits,
       overspendDecisions: s.overspendDecisions,
       dailyNumbers: s.dailyNumbers,
       clock: clock,
@@ -125,8 +123,6 @@ class BudgetStore extends ChangeNotifier {
     bills: const [],
     goals: const [],
     vault: const Vault(openingBalanceCents: 0, steadyPayWeeklyCents: 0),
-    split: null,
-    sharedExpenses: const [],
     overspendDecisions: const {},
   );
 
@@ -137,8 +133,7 @@ class BudgetStore extends ChangeNotifier {
   final List<Bill> _bills;
   final List<Goal> _goals;
   Vault _vault;
-  ExpenseSplit? _split;
-  final List<SharedExpense> _shared;
+  SplitBook _splits;
 
   /// How each day's overspend was handled (S4), by local date.
   final Map<LocalDate, OverspendDecision> _overspendHandled;
@@ -192,8 +187,10 @@ class BudgetStore extends ChangeNotifier {
   List<Bill> get bills => List.unmodifiable(_bills);
   List<Goal> get goals => List.unmodifiable(_goals);
   Vault get vault => _vault;
-  ExpenseSplit? get split => _split;
-  List<SharedExpense> get sharedExpenses => List.unmodifiable(_shared);
+  SplitBook get splits => _splits;
+
+  /// Everyone you have money outstanding with, across all groups.
+  List<PersonBalance> get splitBalances => personBalances(_splits);
 
   LocalDate get today => _clock();
   LocalDate get nextPayday => _settings.nextPayday;
@@ -302,6 +299,25 @@ class BudgetStore extends ChangeNotifier {
         settings: _settings,
         bills: _bills,
         loggedToday: _entries.any((e) => e.localDate == today),
+        debts: [
+          for (final b in splitBalances)
+            for (final owedToYou in [true, false])
+              if ((owedToYou ? b.owesYou : b.youOwe) > 0 && b.since != null)
+                DebtReminder(
+                  personId: b.personId,
+                  name: _splits.nameOf(b.personId),
+                  cents: owedToYou ? b.owesYou : b.youOwe,
+                  owedToYou: owedToYou,
+                  since: b.since!,
+                  groups: {
+                    for (final t in b.transfers)
+                      if ((t.toId == youId) == owedToYou)
+                        _splits.group(t.groupId!)?.name,
+                  }.whereType<String>().join(' and '),
+                  muted: _splits.person(b.personId)?.remindMuted ?? false,
+                  snoozedUntil: _splits.person(b.personId)?.remindSnoozedUntil,
+                ),
+        ],
       );
 
   /// Today's entries, newest first.
@@ -397,13 +413,6 @@ class BudgetStore extends ChangeNotifier {
       .where((g) => !g.paused && !g.isReached)
       .fold(0, (sum, g) => sum + g.dailySetAsideCents);
 
-  /// Positive = the other person owes you.
-  int get splitBalanceCents {
-    final s = _split;
-    if (s == null) return 0;
-    return _shared.fold(0, (sum, e) => sum + e.balanceEffectCents(s));
-  }
-
   OverspendDecision? overspendHandledOn(LocalDate day) =>
       _overspendHandled[day];
 
@@ -416,8 +425,7 @@ class BudgetStore extends ChangeNotifier {
     bills: List.of(_bills),
     goals: List.of(_goals),
     vault: _vault,
-    split: _split,
-    sharedExpenses: List.of(_shared),
+    splits: _splits,
     overspendDecisions: Map.of(_overspendHandled),
     dailyNumbers: Map.of(_dailyNumbers),
   );
@@ -689,34 +697,218 @@ class BudgetStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addSharedExpense(SharedExpense expense) {
-    _shared.add(expense);
+  // ─── Split groups ────────────────────────────────────────────────────────
+
+  void _setSplits(SplitBook book) {
+    _splits = book;
     notifyListeners();
-    _save((r) => r.addSharedExpense(expense));
   }
 
-  void setSplit(ExpenseSplit split) {
-    _split = split;
-    notifyListeners();
-    _save((r) => r.saveSplit(split));
-  }
-
-  /// Records a settle-up: clears shared expenses, balance back to zero.
-  void settleUp() {
-    final s = _split;
-    if (s == null) return;
-    _shared.clear();
-    final settled = ExpenseSplit(
-      id: s.id,
-      personName: s.personName,
-      yourSharePercent: s.yourSharePercent,
-      method: s.method,
-      lastSettled: today,
+  /// A new person to split with (names are all Steady knows about them).
+  SplitPerson addSplitPerson(String name) {
+    final person = SplitPerson(id: newId('person'), name: name.trim());
+    _setSplits(
+      SplitBook(
+        people: [..._splits.people, person],
+        groups: _splits.groups,
+        expenses: _splits.expenses,
+        settlements: _splits.settlements,
+      ),
     );
-    _split = settled;
-    notifyListeners();
-    _save((r) => r.settleUp(settled));
+    _save((r) => r.upsertSplitPerson(person));
+    return person;
   }
+
+  void updateSplitPerson(SplitPerson person) {
+    _setSplits(
+      SplitBook(
+        people: [
+          for (final p in _splits.people) p.id == person.id ? person : p,
+        ],
+        groups: _splits.groups,
+        expenses: _splits.expenses,
+        settlements: _splits.settlements,
+      ),
+    );
+    _save((r) => r.upsertSplitPerson(person));
+  }
+
+  /// Adds or updates a group.
+  void saveSplitGroup(SplitGroup group) {
+    final exists = _splits.group(group.id) != null;
+    final groups = exists
+        ? [for (final g in _splits.groups) g.id == group.id ? group : g]
+        : [..._splits.groups, group];
+    _setSplits(
+      SplitBook(
+        people: _splits.people,
+        groups: groups,
+        expenses: _splits.expenses,
+        settlements: _splits.settlements,
+      ),
+    );
+    final order = groups.indexOf(group);
+    _save((r) => r.upsertSplitGroup(group, sortOrder: order));
+  }
+
+  /// Removes a group and its expenses and settlements. Spends and income
+  /// already logged stay in your history: that money really moved.
+  void deleteSplitGroup(String id) {
+    _setSplits(
+      SplitBook(
+        people: _splits.people,
+        groups: [..._splits.groups.where((g) => g.id != id)],
+        expenses: [..._splits.expenses.where((e) => e.groupId != id)],
+        settlements: [..._splits.settlements.where((s) => s.groupId != id)],
+      ),
+    );
+    _save((r) => r.deleteSplitGroup(id));
+  }
+
+  /// A shared expense. When you paid, the whole amount is also logged as
+  /// your spend (it left your money; what others owe comes back when they
+  /// settle up).
+  GroupExpense addGroupExpense({
+    required String groupId,
+    required String name,
+    required int amountCents,
+    required LocalDate date,
+    required String paidBy,
+    required Map<String, int> shares,
+    String? categoryId,
+  }) {
+    Entry? entry;
+    if (paidBy == youId) {
+      entry = _moneyEntry(
+        EntryType.spend,
+        amountCents,
+        name,
+        date: date,
+        categoryId: categoryId,
+        groupId: groupId,
+      );
+      addEntry(entry);
+    }
+    final expense = GroupExpense(
+      id: newId('gexp'),
+      groupId: groupId,
+      name: name,
+      amountCents: amountCents,
+      date: date,
+      paidBy: paidBy,
+      shares: shares,
+      entryId: entry?.id,
+    );
+    _setSplits(
+      SplitBook(
+        people: _splits.people,
+        groups: _splits.groups,
+        expenses: [..._splits.expenses, expense],
+        settlements: _splits.settlements,
+      ),
+    );
+    _save((r) => r.upsertGroupExpense(expense));
+    return expense;
+  }
+
+  /// Removes a shared expense, and the spend it logged for you.
+  void deleteGroupExpense(String id) {
+    final expense = _splits.expenses.where((e) => e.id == id).firstOrNull;
+    if (expense == null) return;
+    final entryId = expense.entryId;
+    if (entryId != null) removeEntry(entryId);
+    _setSplits(
+      SplitBook(
+        people: _splits.people,
+        groups: _splits.groups,
+        expenses: [..._splits.expenses.where((e) => e.id != id)],
+        settlements: _splits.settlements,
+      ),
+    );
+    _save((r) => r.deleteGroupExpense(id));
+  }
+
+  /// Records [from] paying [to] in a group. When you're one of them and
+  /// [logMoney] is on, it also goes in your entries: money in raises your
+  /// daily number, money out counts against it.
+  Settlement recordSettlement({
+    required String groupId,
+    required String fromId,
+    required String toId,
+    required int amountCents,
+    bool logMoney = true,
+  }) {
+    Entry? entry;
+    if (logMoney && (fromId == youId || toId == youId)) {
+      final other = _splits.nameOf(fromId == youId ? toId : fromId);
+      entry = _moneyEntry(
+        fromId == youId ? EntryType.spend : EntryType.income,
+        amountCents,
+        fromId == youId ? 'Paid $other back' : '$other paid you back',
+        date: today,
+        groupId: groupId,
+      );
+      addEntry(entry);
+    }
+    final settlement = Settlement(
+      id: newId('settle'),
+      groupId: groupId,
+      fromId: fromId,
+      toId: toId,
+      amountCents: amountCents,
+      date: today,
+      entryId: entry?.id,
+    );
+    _setSplits(
+      SplitBook(
+        people: _splits.people,
+        groups: _splits.groups,
+        expenses: _splits.expenses,
+        settlements: [..._splits.settlements, settlement],
+      ),
+    );
+    _save((r) => r.addSettlement(settlement));
+    return settlement;
+  }
+
+  /// "Settle up with Sam": everything between you and them, in every group.
+  void settleUpWith(String personId, {bool logMoney = true}) {
+    final balance = splitBalances
+        .where((b) => b.personId == personId)
+        .firstOrNull;
+    if (balance == null) return;
+    for (final t in balance.transfers) {
+      recordSettlement(
+        groupId: t.groupId!,
+        fromId: t.fromId,
+        toId: t.toId,
+        amountCents: t.amountCents,
+        logMoney: logMoney,
+      );
+    }
+  }
+
+  Entry _moneyEntry(
+    EntryType type,
+    int amountCents,
+    String merchant, {
+    required LocalDate date,
+    required String groupId,
+    String? categoryId,
+  }) => Entry(
+    id: newId('entry'),
+    type: type,
+    amountCents: amountCents,
+    localDate: date,
+    createdAtUtc: DateTime.now().toUtc(),
+    timeZoneId: DateTime.now().timeZoneName,
+    merchant: merchant.length > Entry.maxMerchantLength
+        ? merchant.substring(0, Entry.maxMerchantLength)
+        : merchant,
+    categoryId: categoryId,
+    planned: type == EntryType.spend ? true : null,
+    splitId: groupId,
+  );
 
   /// Onboarding "Set up your money": starts a pay cycle today from the money
   /// the user has now. Today's entries are kept and count against today.
@@ -792,10 +984,7 @@ class BudgetStore extends ChangeNotifier {
       ..clear()
       ..addAll(s.goals);
     _vault = s.vault!;
-    _split = s.split;
-    _shared
-      ..clear()
-      ..addAll(s.sharedExpenses);
+    _splits = s.splits;
     _overspendHandled
       ..clear()
       ..addAll(s.overspendDecisions);
@@ -1015,42 +1204,7 @@ class BudgetStore extends ChangeNotifier {
         steadyPayWeeklyCents: 78000,
         lastReleaseDate: mondayOnOrBefore(today),
       ),
-      split: ExpenseSplit(
-        id: 'split',
-        personName: 'Alex',
-        yourSharePercent: 60,
-        lastSettled: today.addDays(-17),
-      ),
-      sharedExpenses: [
-        SharedExpense(
-          id: 's1',
-          name: 'Groceries',
-          amountCents: 11240,
-          date: today.addDays(-2),
-          paidByYou: true,
-        ),
-        SharedExpense(
-          id: 's2',
-          name: 'Dinner out',
-          amountCents: 6800,
-          date: today.addDays(-4),
-          paidByYou: true,
-        ),
-        SharedExpense(
-          id: 's3',
-          name: 'Home supplies',
-          amountCents: 11810,
-          date: today.addDays(-5),
-          paidByYou: true,
-        ),
-        SharedExpense(
-          id: 's4',
-          name: 'Electric (last month)',
-          amountCents: 9150,
-          date: today.addDays(-6),
-          paidByYou: false,
-        ),
-      ],
+      splits: _sampleSplits(today),
       // Two weeks of the design's $64 number, so summaries have history.
       dailyNumbers: {for (var d = 1; d <= 14; d++) today.addDays(-d): 6400},
     );
@@ -1064,4 +1218,89 @@ class CycleBill {
   final Bill bill;
   final LocalDate date;
   final bool paid;
+}
+
+/// Demo split groups: the design's 60 / 40 split with Alex (Alex owes you
+/// $64.50), plus flatmates.
+SplitBook _sampleSplits(LocalDate today) {
+  final alex = SplitBook.fromLegacy(
+    splitId: 'split',
+    personName: 'Alex',
+    yourSharePercent: 60,
+    legacyMethod: 'byIncome',
+    expenses: [
+      (
+        id: 's1',
+        name: 'Groceries',
+        amountCents: 11240,
+        date: today.addDays(-2),
+        paidByYou: true,
+      ),
+      (
+        id: 's2',
+        name: 'Dinner out',
+        amountCents: 6800,
+        date: today.addDays(-4),
+        paidByYou: true,
+      ),
+      (
+        id: 's3',
+        name: 'Home supplies',
+        amountCents: 11810,
+        date: today.addDays(-5),
+        paidByYou: true,
+      ),
+      (
+        id: 's4',
+        name: 'Electric (last month)',
+        amountCents: 9150,
+        date: today.addDays(-6),
+        paidByYou: false,
+      ),
+    ],
+  );
+  const sam = SplitPerson(id: 'person-sam', name: 'Sam');
+  const priya = SplitPerson(id: 'person-priya', name: 'Priya');
+  final flat = [youId, sam.id, priya.id];
+  return SplitBook(
+    people: [...alex.people, sam, priya],
+    groups: [
+      ...alex.groups,
+      SplitGroup(
+        id: 'flat',
+        name: 'Flat 4B',
+        memberIds: [sam.id, priya.id],
+        createdOn: today.addDays(-30),
+      ),
+    ],
+    expenses: [
+      ...alex.expenses,
+      GroupExpense(
+        id: 'f1',
+        groupId: 'flat',
+        name: 'Internet',
+        amountCents: 6000,
+        date: today.addDays(-9),
+        paidBy: youId,
+        shares: splitShares(
+          amountCents: 6000,
+          participants: flat,
+          paidBy: youId,
+        ),
+      ),
+      GroupExpense(
+        id: 'f2',
+        groupId: 'flat',
+        name: 'Cleaning supplies',
+        amountCents: 2400,
+        date: today.addDays(-3),
+        paidBy: sam.id,
+        shares: splitShares(
+          amountCents: 2400,
+          participants: flat,
+          paidBy: sam.id,
+        ),
+      ),
+    ],
+  );
 }

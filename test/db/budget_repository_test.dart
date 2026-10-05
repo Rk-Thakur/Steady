@@ -50,8 +50,17 @@ void main() {
     expect(loaded.bills.length, original.bills.length);
     expect(loaded.goals.map((g) => g.name), original.goals.map((g) => g.name));
     expect(loaded.vault!.steadyPayWeeklyCents, 78000);
-    expect(loaded.split!.personName, 'Alex');
-    expect(loaded.sharedExpenses.length, 4);
+    // Split groups round-trip whole: people, groups, expenses with shares.
+    expect(loaded.splits.people.map((p) => p.name), ['Alex', 'Sam', 'Priya']);
+    expect(loaded.splits.groups.map((g) => g.name), ['You & Alex', 'Flat 4B']);
+    expect(loaded.splits.expenses.length, original.splits.expenses.length);
+    final internet = loaded.splits.expenses.firstWhere((e) => e.id == 'f1');
+    expect(internet.shares, {
+      youId: 2000,
+      'person-sam': 2000,
+      'person-priya': 2000,
+    });
+    expect(loaded.splits.groups.first.weights, {youId: 60, 'person-split': 40});
 
     final client = loaded.entries.firstWhere((e) => e.id == 'client');
     expect(client.type, EntryType.income);
@@ -147,23 +156,32 @@ void main() {
     expect(s.entries.where((e) => e.categoryId == 'food'), isNotEmpty);
   });
 
-  test('settle up clears shared expenses and stamps the date', () async {
-    final snap = sample();
-    await repo.replaceAll(snap);
-    final s = snap.split!;
-    await repo.settleUp(
-      ExpenseSplit(
-        id: s.id,
-        personName: s.personName,
-        yourSharePercent: s.yourSharePercent,
-        method: s.method,
-        lastSettled: oct2,
-      ),
-    );
-    final loaded = await repo.load();
-    expect(loaded.sharedExpenses, isEmpty);
-    expect(loaded.split!.lastSettled, oct2);
-  });
+  test(
+    'settlements persist; deleting a group removes everything in it',
+    () async {
+      await repo.replaceAll(sample());
+      await repo.addSettlement(
+        const Settlement(
+          id: 'st',
+          groupId: 'flat',
+          fromId: 'person-sam',
+          toId: youId,
+          amountCents: 2000,
+          date: oct2,
+        ),
+      );
+      var loaded = await repo.load();
+      expect(loaded.splits.settlements.single.amountCents, 2000);
+
+      await repo.deleteSplitGroup('flat');
+      loaded = await repo.load();
+      expect(loaded.splits.groups.map((g) => g.id), ['split']);
+      expect(loaded.splits.expenses.where((e) => e.groupId == 'flat'), isEmpty);
+      expect(loaded.splits.settlements, isEmpty);
+      // People stay: they may be in other groups.
+      expect(loaded.splits.people.length, 3);
+    },
+  );
 
   test('overspend decisions persist per day', () async {
     const decision = OverspendDecision(
@@ -182,7 +200,7 @@ void main() {
     expect(s.isFresh, isTrue);
     expect(s.entries, isEmpty);
     expect(s.bills, isEmpty);
-    expect(s.split, isNull);
+    expect(s.splits.isEmpty, isTrue);
   });
 
   test(

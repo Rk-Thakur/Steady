@@ -37,25 +37,7 @@ abstract final class BackupCodec {
             'targetWeeks': s.vault!.targetWeeks,
             'lastReleaseDate': s.vault!.lastReleaseDate?.toIso(),
           },
-    'split': s.split == null
-        ? null
-        : {
-            'id': s.split!.id,
-            'personName': s.split!.personName,
-            'yourSharePercent': s.split!.yourSharePercent,
-            'method': s.split!.method.name,
-            'lastSettled': s.split!.lastSettled?.toIso(),
-          },
-    'sharedExpenses': [
-      for (final e in s.sharedExpenses)
-        {
-          'id': e.id,
-          'name': e.name,
-          'amountCents': e.amountCents,
-          'date': e.date.toIso(),
-          'paidByYou': e.paidByYou,
-        },
-    ],
+    'splits': _splitsJson(s.splits),
     'overspendDecisions': {
       for (final d in s.overspendDecisions.entries)
         d.key.toIso(): {
@@ -106,25 +88,9 @@ abstract final class BackupCodec {
                 targetWeeks: vault['targetWeeks']! as int,
                 lastReleaseDate: _dateOrNull(vault['lastReleaseDate']),
               ),
-        split: split == null
-            ? null
-            : ExpenseSplit(
-                id: split['id']! as String,
-                personName: split['personName']! as String,
-                yourSharePercent: split['yourSharePercent']! as int,
-                method: SplitMethod.values.byName(split['method']! as String),
-                lastSettled: _dateOrNull(split['lastSettled']),
-              ),
-        sharedExpenses: [
-          for (final e in _list(j['sharedExpenses']))
-            SharedExpense(
-              id: e['id']! as String,
-              name: e['name']! as String,
-              amountCents: e['amountCents']! as int,
-              date: _date(e['date']),
-              paidByYou: e['paidByYou']! as bool,
-            ),
-        ],
+        splits: j.containsKey('splits')
+            ? _splitsFrom(j['splits']! as Map<String, Object?>)
+            : _legacySplit(split, j['sharedExpenses']),
         overspendDecisions: {
           for (final d
               in ((j['overspendDecisions'] ?? const <String, Object?>{})
@@ -166,11 +132,15 @@ abstract final class BackupCodec {
     'reminders': {
       'logSpends': s.reminders.logSpends,
       'logAtMinutes': s.reminders.logAtMinutes,
+      'payday': s.reminders.payday,
+      'paydayAtMinutes': s.reminders.paydayAtMinutes,
       'billsDue': s.reminders.billsDue,
       'latePause': s.reminders.latePause,
       'recaps': s.reminders.recaps,
       'backupMonthly': s.reminders.backupMonthly,
       'quietFromMinutes': s.reminders.quietFromMinutes,
+      'debtsOwedToYou': s.reminders.debtsOwedToYou,
+      'debtsYouOwe': s.reminders.debtsYouOwe,
     },
   };
 
@@ -212,11 +182,15 @@ abstract final class BackupCodec {
     return ReminderSettings(
       logSpends: r['logSpends'] as bool? ?? d.logSpends,
       logAtMinutes: r['logAtMinutes'] as int? ?? d.logAtMinutes,
+      payday: r['payday'] as bool? ?? r['logSpends'] as bool? ?? d.payday,
+      paydayAtMinutes: r['paydayAtMinutes'] as int? ?? d.paydayAtMinutes,
       billsDue: r['billsDue'] as bool? ?? d.billsDue,
       latePause: r['latePause'] as bool? ?? d.latePause,
       recaps: r['recaps'] as bool? ?? d.recaps,
       backupMonthly: r['backupMonthly'] as bool? ?? d.backupMonthly,
       quietFromMinutes: r['quietFromMinutes'] as int? ?? d.quietFromMinutes,
+      debtsOwedToYou: r['debtsOwedToYou'] as bool? ?? d.debtsOwedToYou,
+      debtsYouOwe: r['debtsYouOwe'] as bool? ?? d.debtsYouOwe,
     );
   }
 
@@ -305,6 +279,136 @@ abstract final class BackupCodec {
     paused: g['paused']! as bool,
     createdOn: _dateOrNull(g['createdOn']),
   );
+
+  static Map<String, Object?> _splitsJson(SplitBook b) => {
+    'people': [
+      for (final p in b.people)
+        {
+          'id': p.id,
+          'name': p.name,
+          'remindMuted': p.remindMuted,
+          'remindSnoozedUntil': p.remindSnoozedUntil?.toIso(),
+        },
+    ],
+    'groups': [
+      for (final g in b.groups)
+        {
+          'id': g.id,
+          'name': g.name,
+          'memberIds': g.memberIds,
+          'method': g.method.name,
+          'weights': g.weights,
+          'simplifyDebts': g.simplifyDebts,
+          'createdOn': g.createdOn?.toIso(),
+        },
+    ],
+    'expenses': [
+      for (final e in b.expenses)
+        {
+          'id': e.id,
+          'groupId': e.groupId,
+          'name': e.name,
+          'amountCents': e.amountCents,
+          'date': e.date.toIso(),
+          'paidBy': e.paidBy,
+          'shares': e.shares,
+          'entryId': e.entryId,
+        },
+    ],
+    'settlements': [
+      for (final s in b.settlements)
+        {
+          'id': s.id,
+          'groupId': s.groupId,
+          'fromId': s.fromId,
+          'toId': s.toId,
+          'amountCents': s.amountCents,
+          'date': s.date.toIso(),
+          'entryId': s.entryId,
+        },
+    ],
+  };
+
+  static Map<String, int> _intMap(Object? v) => {
+    for (final e
+        in ((v ?? const <String, Object?>{}) as Map<String, Object?>).entries)
+      e.key: e.value! as int,
+  };
+
+  static SplitBook _splitsFrom(Map<String, Object?> j) => SplitBook(
+    people: [
+      for (final p in _list(j['people']))
+        SplitPerson(
+          id: p['id']! as String,
+          name: p['name']! as String,
+          remindMuted: p['remindMuted'] as bool? ?? false,
+          remindSnoozedUntil: _dateOrNull(p['remindSnoozedUntil']),
+        ),
+    ],
+    groups: [
+      for (final g in _list(j['groups']))
+        SplitGroup(
+          id: g['id']! as String,
+          name: g['name']! as String,
+          memberIds: [
+            for (final m in g['memberIds']! as List<Object?>) m! as String,
+          ],
+          method: SplitMethod.values.byName(g['method']! as String),
+          weights: _intMap(g['weights']),
+          simplifyDebts: g['simplifyDebts'] as bool? ?? true,
+          createdOn: _dateOrNull(g['createdOn']),
+        ),
+    ],
+    expenses: [
+      for (final e in _list(j['expenses']))
+        GroupExpense(
+          id: e['id']! as String,
+          groupId: e['groupId']! as String,
+          name: e['name']! as String,
+          amountCents: e['amountCents']! as int,
+          date: _date(e['date']),
+          paidBy: e['paidBy']! as String,
+          shares: _intMap(e['shares']),
+          entryId: e['entryId'] as String?,
+        ),
+    ],
+    settlements: [
+      for (final s in _list(j['settlements']))
+        Settlement(
+          id: s['id']! as String,
+          groupId: s['groupId']! as String,
+          fromId: s['fromId']! as String,
+          toId: s['toId']! as String,
+          amountCents: s['amountCents']! as int,
+          date: _date(s['date']),
+          entryId: s['entryId'] as String?,
+        ),
+    ],
+  );
+
+  /// Backups made before split groups: one partner + shared expenses.
+  static SplitBook _legacySplit(
+    Map<String, Object?>? split,
+    Object? sharedExpenses,
+  ) {
+    if (split == null) return SplitBook.empty;
+    return SplitBook.fromLegacy(
+      splitId: split['id']! as String,
+      personName: split['personName']! as String,
+      yourSharePercent: split['yourSharePercent']! as int,
+      legacyMethod: split['method']! as String,
+      expenses: [
+        for (final e in _list(sharedExpenses))
+          (
+            id: e['id']! as String,
+            name: e['name']! as String,
+            amountCents: e['amountCents']! as int,
+            date: _date(e['date']),
+            paidByYou: e['paidByYou']! as bool,
+          ),
+      ],
+    );
+  }
 
   static List<Map<String, Object?>> _list(Object? v) => [
     for (final x in (v ?? const <Object?>[]) as List<Object?>)

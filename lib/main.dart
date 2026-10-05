@@ -10,9 +10,7 @@ export 'app/steady_app.dart' show SteadyApp;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-  options: DefaultFirebaseOptions.currentPlatform,
-);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   Notifications.instance = LocalNotifications();
   Biometrics.instance = DeviceBiometrics();
   runApp(const SteadyBootstrap());

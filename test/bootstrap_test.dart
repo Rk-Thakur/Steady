@@ -35,8 +35,6 @@ void main() {
           bills: [],
           goals: [],
           vault: null,
-          split: null,
-          sharedExpenses: [],
           overspendDecisions: {},
         ),
         clock: () => oct2,

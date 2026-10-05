@@ -2,7 +2,10 @@
 // ignore_for_file: unused_local_variable, unused_import
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift_dev/api/migrations_native.dart';
+import 'package:steady/data/db/budget_repository.dart';
 import 'package:steady/data/db/database.dart';
+import 'package:steady/domain/models/split.dart';
+import 'package:steady/domain/split_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'generated/schema.dart';
@@ -134,21 +137,78 @@ void main() {
     await db.close();
   });
 
-  test('a v4 database that already has the reminder columns upgrades', () async {
-    final schema = await verifier.schemaAt(4);
-    for (final sql in [
-      'ALTER TABLE settings_rows ADD COLUMN remind_log_spends INTEGER NOT NULL DEFAULT 1',
-      'ALTER TABLE settings_rows ADD COLUMN remind_log_at INTEGER NOT NULL DEFAULT 1230',
-      'ALTER TABLE settings_rows ADD COLUMN remind_bills INTEGER NOT NULL DEFAULT 1',
-      'ALTER TABLE settings_rows ADD COLUMN remind_late_pause INTEGER NOT NULL DEFAULT 1',
-      'ALTER TABLE settings_rows ADD COLUMN remind_recaps INTEGER NOT NULL DEFAULT 0',
-      'ALTER TABLE settings_rows ADD COLUMN remind_backup INTEGER NOT NULL DEFAULT 1',
-      'ALTER TABLE settings_rows ADD COLUMN quiet_from INTEGER NOT NULL DEFAULT 1380',
-    ]) {
-      schema.rawDatabase.execute(sql);
-    }
+  test(
+    'a v4 database that already has the reminder columns upgrades',
+    () async {
+      final schema = await verifier.schemaAt(4);
+      for (final sql in [
+        'ALTER TABLE settings_rows ADD COLUMN remind_log_spends INTEGER NOT NULL DEFAULT 1',
+        'ALTER TABLE settings_rows ADD COLUMN remind_log_at INTEGER NOT NULL DEFAULT 1230',
+        'ALTER TABLE settings_rows ADD COLUMN remind_bills INTEGER NOT NULL DEFAULT 1',
+        'ALTER TABLE settings_rows ADD COLUMN remind_late_pause INTEGER NOT NULL DEFAULT 1',
+        'ALTER TABLE settings_rows ADD COLUMN remind_recaps INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE settings_rows ADD COLUMN remind_backup INTEGER NOT NULL DEFAULT 1',
+        'ALTER TABLE settings_rows ADD COLUMN quiet_from INTEGER NOT NULL DEFAULT 1380',
+      ]) {
+        schema.rawDatabase.execute(sql);
+      }
+      final db = SteadyDatabase(schema.newConnection());
+      await db.customSelect('SELECT 1').get(); // runs the migration
+      await db.close();
+    },
+  );
+
+  test(
+    'v7 → v8: the payday reminder starts as "Log your spends" was',
+    () async {
+      final schema = await verifier.schemaAt(7);
+      schema.rawDatabase.execute(
+        "INSERT INTO settings_rows (id, currency, pay_frequency, next_payday, "
+        "income_type, theme, overspend_strategy, remind_log_spends) "
+        "VALUES (1, 'usd', 'monthly', '2026-10-15', 'salary', 'system', "
+        "'spreadEvenly', 0)",
+      );
+      final db = SteadyDatabase(schema.newConnection());
+      final row = await db.select(db.settingsRows).getSingle();
+      expect(row.remindLogSpends, isFalse);
+      expect(row.remindPayday, isFalse); // followed "Log your spends"
+      expect(row.remindPaydayAt, 540); // 9:00 AM
+      await db.close();
+    },
+  );
+
+  test('v8 → v9: the one-person split becomes a group, balances intact', () async {
+    final schema = await verifier.schemaAt(8);
+    final raw = schema.rawDatabase;
+    raw.execute(
+      "INSERT INTO splits (id, person_name, your_share_percent, method, "
+      "last_settled) VALUES ('split', 'Alex', 60, 'byIncome', '2026-09-15')",
+    );
+    raw.execute(
+      "INSERT INTO shared_expenses (id, name, amount_cents, date, paid_by_you) "
+      "VALUES ('s1', 'Groceries', 11240, '2026-09-30', 1), "
+      "('s4', 'Electric', 9150, '2026-09-26', 0)",
+    );
     final db = SteadyDatabase(schema.newConnection());
-    await db.customSelect('SELECT 1').get(); // runs the migration
+    final book = (await BudgetRepository(db).load()).splits;
+    expect(book.people.single.name, 'Alex');
+    final g = book.groups.single;
+    expect(g.id, 'split'); // entries tagged with the old split id still match
+    expect(g.name, 'You & Alex');
+    expect(g.weights, {youId: 60, 'person-split': 40});
+    expect(book.expenses.map((e) => e.id), ['s4', 's1']);
+    // Same balance as before: Alex owes 44.96, you owe 54.90.
+    expect(personBalances(book).single.net, 4496 - 5490);
+    // The old tables are gone.
+    expect(
+      await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE name IN "
+            "('splits', 'shared_expenses')",
+          )
+          .get(),
+      isEmpty,
+    );
     await db.close();
   });
 }

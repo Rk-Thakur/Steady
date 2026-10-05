@@ -16,8 +16,7 @@ class BudgetSnapshot {
     required this.bills,
     required this.goals,
     required this.vault,
-    required this.split,
-    required this.sharedExpenses,
+    this.splits = SplitBook.empty,
     required this.overspendDecisions,
     this.dailyNumbers = const {},
   });
@@ -30,8 +29,7 @@ class BudgetSnapshot {
   final List<Bill> bills;
   final List<Goal> goals;
   final Vault? vault;
-  final ExpenseSplit? split;
-  final List<SharedExpense> sharedExpenses;
+  final SplitBook splits;
   final Map<LocalDate, OverspendDecision> overspendDecisions;
 
   /// Each past day's number (its allowance before spending), as recorded.
@@ -54,7 +52,6 @@ class BudgetRepository {
     final settings = await _db.select(_db.settingsRows).getSingleOrNull();
     final plan = await _db.select(_db.cyclePlans).getSingleOrNull();
     final vault = await _db.select(_db.vaults).getSingleOrNull();
-    final split = await _db.select(_db.splits).getSingleOrNull();
     final categories =
         await (_db.select(_db.categories)..orderBy([
               (t) => OrderingTerm(expression: t.sortOrder),
@@ -73,9 +70,7 @@ class BudgetRepository {
     final goals = await (_db.select(
       _db.goals,
     )..orderBy([(t) => OrderingTerm(expression: t.sortOrder)])).get();
-    final shared = await (_db.select(
-      _db.sharedExpenses,
-    )..orderBy([(t) => OrderingTerm(expression: t.date)])).get();
+    final splits = await _loadSplits();
     final decisions = await _db.select(_db.overspendDecisions).get();
     final numbers = await _db.select(_db.dailyNumbers).get();
 
@@ -100,25 +95,7 @@ class BudgetRepository {
               targetWeeks: vault.targetWeeks,
               lastReleaseDate: vault.lastReleaseDate,
             ),
-      split: split == null
-          ? null
-          : ExpenseSplit(
-              id: split.id,
-              personName: split.personName,
-              yourSharePercent: split.yourSharePercent,
-              method: split.method,
-              lastSettled: split.lastSettled,
-            ),
-      sharedExpenses: [
-        for (final r in shared)
-          SharedExpense(
-            id: r.id,
-            name: r.name,
-            amountCents: r.amountCents,
-            date: r.date,
-            paidByYou: r.paidByYou,
-          ),
-      ],
+      splits: splits,
       overspendDecisions: {
         for (final r in decisions)
           r.localDate: OverspendDecision(
@@ -155,6 +132,10 @@ class BudgetRepository {
           lastBackupOn: Value(s.lastBackupOn),
           remindLogSpends: Value(s.reminders.logSpends),
           remindLogAt: Value(s.reminders.logAtMinutes),
+          remindPayday: Value(s.reminders.payday),
+          remindPaydayAt: Value(s.reminders.paydayAtMinutes),
+          remindDebtsOwed: Value(s.reminders.debtsOwedToYou),
+          remindDebtsYouOwe: Value(s.reminders.debtsYouOwe),
           remindBills: Value(s.reminders.billsDue),
           remindLatePause: Value(s.reminders.latePause),
           remindRecaps: Value(s.reminders.recaps),
@@ -185,22 +166,6 @@ class BudgetRepository {
           lastReleaseDate: Value(v.lastReleaseDate),
         ),
       );
-
-  /// One split partner at a time: replaces any previous one.
-  Future<void> saveSplit(ExpenseSplit s) => _db.transaction(() async {
-    await (_db.delete(_db.splits)..where((t) => t.id.equals(s.id).not())).go();
-    await _db
-        .into(_db.splits)
-        .insertOnConflictUpdate(
-          SplitsCompanion.insert(
-            id: s.id,
-            personName: s.personName,
-            yourSharePercent: s.yourSharePercent,
-            method: s.method,
-            lastSettled: Value(s.lastSettled),
-          ),
-        );
-  });
 
   // ─── Entries ─────────────────────────────────────────────────────────────
 
@@ -300,23 +265,220 @@ class BudgetRepository {
 
   // ─── Splits ──────────────────────────────────────────────────────────────
 
-  Future<void> addSharedExpense(SharedExpense e) => _db
-      .into(_db.sharedExpenses)
+  Future<SplitBook> _loadSplits() async {
+    final people = await _db.select(_db.splitPeople).get();
+    final groups = await (_db.select(
+      _db.splitGroups,
+    )..orderBy([(t) => OrderingTerm(expression: t.sortOrder)])).get();
+    final members = await (_db.select(
+      _db.splitGroupMembers,
+    )..orderBy([(t) => OrderingTerm(expression: t.sortOrder)])).get();
+    final expenses =
+        await (_db.select(_db.groupExpenses)..orderBy([
+              (t) => OrderingTerm(expression: t.date),
+              (t) => OrderingTerm(expression: t.id),
+            ]))
+            .get();
+    final shares = await _db.select(_db.groupExpenseShares).get();
+    final settlements = await (_db.select(
+      _db.splitSettlements,
+    )..orderBy([(t) => OrderingTerm(expression: t.date)])).get();
+
+    return SplitBook(
+      people: [
+        for (final p in people)
+          SplitPerson(
+            id: p.id,
+            name: p.name,
+            remindMuted: p.remindMuted,
+            remindSnoozedUntil: p.remindSnoozedUntil,
+          ),
+      ],
+      groups: [
+        for (final g in groups)
+          SplitGroup(
+            id: g.id,
+            name: g.name,
+            method: g.method,
+            simplifyDebts: g.simplifyDebts,
+            createdOn: g.createdOn,
+            memberIds: [
+              for (final m in members)
+                if (m.groupId == g.id && m.personId != youId) m.personId,
+            ],
+            weights: {
+              for (final m in members)
+                if (m.groupId == g.id && m.weight > 0) m.personId: m.weight,
+            },
+          ),
+      ],
+      expenses: [
+        for (final e in expenses)
+          GroupExpense(
+            id: e.id,
+            groupId: e.groupId,
+            name: e.name,
+            amountCents: e.amountCents,
+            date: e.date,
+            paidBy: e.paidBy,
+            entryId: e.entryId,
+            shares: {
+              for (final s in shares)
+                if (s.expenseId == e.id) s.personId: s.shareCents,
+            },
+          ),
+      ],
+      settlements: [
+        for (final s in settlements)
+          Settlement(
+            id: s.id,
+            groupId: s.groupId,
+            fromId: s.fromId,
+            toId: s.toId,
+            amountCents: s.amountCents,
+            date: s.date,
+            entryId: s.entryId,
+          ),
+      ],
+    );
+  }
+
+  Future<void> upsertSplitPerson(SplitPerson p) => _db
+      .into(_db.splitPeople)
       .insertOnConflictUpdate(
-        SharedExpensesCompanion.insert(
-          id: e.id,
-          name: e.name,
-          amountCents: e.amountCents,
-          date: e.date,
-          paidByYou: e.paidByYou,
+        SplitPeopleCompanion.insert(
+          id: p.id,
+          name: p.name,
+          remindMuted: Value(p.remindMuted),
+          remindSnoozedUntil: Value(p.remindSnoozedUntil),
         ),
       );
 
-  /// Settle up: clear shared expenses and stamp the settle date, atomically.
-  Future<void> settleUp(ExpenseSplit settled) => _db.transaction(() async {
-    await _db.delete(_db.sharedExpenses).go();
-    await saveSplit(settled);
+  /// The group and its member list (replaced whole).
+  Future<void> upsertSplitGroup(SplitGroup g, {int? sortOrder}) =>
+      _db.transaction(() async {
+        await _db
+            .into(_db.splitGroups)
+            .insertOnConflictUpdate(
+              SplitGroupsCompanion.insert(
+                id: g.id,
+                name: g.name,
+                method: g.method,
+                simplifyDebts: Value(g.simplifyDebts),
+                createdOn: Value(g.createdOn),
+                sortOrder: sortOrder == null
+                    ? const Value.absent()
+                    : Value(sortOrder),
+              ),
+            );
+        await (_db.delete(
+          _db.splitGroupMembers,
+        )..where((t) => t.groupId.equals(g.id))).go();
+        for (final (i, id) in g.everyone.indexed) {
+          await _db
+              .into(_db.splitGroupMembers)
+              .insert(
+                SplitGroupMembersCompanion.insert(
+                  groupId: g.id,
+                  personId: id,
+                  weight: Value(g.weights[id] ?? 0),
+                  sortOrder: Value(i),
+                ),
+              );
+        }
+      });
+
+  /// A group with everything in it.
+  Future<void> deleteSplitGroup(String id) => _db.transaction(() async {
+    final expenseIds =
+        await (_db.selectOnly(_db.groupExpenses)
+              ..addColumns([_db.groupExpenses.id])
+              ..where(_db.groupExpenses.groupId.equals(id)))
+            .map((r) => r.read(_db.groupExpenses.id)!)
+            .get();
+    await (_db.delete(
+      _db.groupExpenseShares,
+    )..where((t) => t.expenseId.isIn(expenseIds))).go();
+    await (_db.delete(
+      _db.groupExpenses,
+    )..where((t) => t.groupId.equals(id))).go();
+    await (_db.delete(
+      _db.splitSettlements,
+    )..where((t) => t.groupId.equals(id))).go();
+    await (_db.delete(
+      _db.splitGroupMembers,
+    )..where((t) => t.groupId.equals(id))).go();
+    await (_db.delete(_db.splitGroups)..where((t) => t.id.equals(id))).go();
   });
+
+  Future<void> upsertGroupExpense(GroupExpense e) => _db.transaction(() async {
+    await _db
+        .into(_db.groupExpenses)
+        .insertOnConflictUpdate(
+          GroupExpensesCompanion.insert(
+            id: e.id,
+            groupId: e.groupId,
+            name: e.name,
+            amountCents: e.amountCents,
+            date: e.date,
+            paidBy: e.paidBy,
+            entryId: Value(e.entryId),
+          ),
+        );
+    await (_db.delete(
+      _db.groupExpenseShares,
+    )..where((t) => t.expenseId.equals(e.id))).go();
+    for (final s in e.shares.entries) {
+      await _db
+          .into(_db.groupExpenseShares)
+          .insert(
+            GroupExpenseSharesCompanion.insert(
+              expenseId: e.id,
+              personId: s.key,
+              shareCents: s.value,
+            ),
+          );
+    }
+  });
+
+  Future<void> deleteGroupExpense(String id) => _db.transaction(() async {
+    await (_db.delete(
+      _db.groupExpenseShares,
+    )..where((t) => t.expenseId.equals(id))).go();
+    await (_db.delete(_db.groupExpenses)..where((t) => t.id.equals(id))).go();
+  });
+
+  Future<void> addSettlement(Settlement s) => _db
+      .into(_db.splitSettlements)
+      .insertOnConflictUpdate(
+        SplitSettlementsCompanion.insert(
+          id: s.id,
+          groupId: s.groupId,
+          fromId: s.fromId,
+          toId: s.toId,
+          amountCents: s.amountCents,
+          date: s.date,
+          entryId: Value(s.entryId),
+        ),
+      );
+
+  Future<void> deleteSettlement(String id) =>
+      (_db.delete(_db.splitSettlements)..where((t) => t.id.equals(id))).go();
+
+  Future<void> _saveSplitBook(SplitBook b) async {
+    for (final p in b.people) {
+      await upsertSplitPerson(p);
+    }
+    for (var i = 0; i < b.groups.length; i++) {
+      await upsertSplitGroup(b.groups[i], sortOrder: i);
+    }
+    for (final e in b.expenses) {
+      await upsertGroupExpense(e);
+    }
+    for (final s in b.settlements) {
+      await addSettlement(s);
+    }
+  }
 
   // ─── Overspend ───────────────────────────────────────────────────────────
 
@@ -348,7 +510,6 @@ class BudgetRepository {
     if (s.settings != null) await saveSettings(s.settings!);
     if (s.plan != null) await savePlan(s.plan!);
     if (s.vault != null) await saveVault(s.vault!);
-    if (s.split != null) await saveSplit(s.split!);
     for (var i = 0; i < s.categories.length; i++) {
       await upsertCategory(s.categories[i], sortOrder: i);
     }
@@ -361,9 +522,7 @@ class BudgetRepository {
     for (var i = 0; i < s.goals.length; i++) {
       await upsertGoal(s.goals[i], sortOrder: i);
     }
-    for (final e in s.sharedExpenses) {
-      await addSharedExpense(e);
-    }
+    await _saveSplitBook(s.splits);
     for (final d in s.overspendDecisions.entries) {
       await saveOverspendDecision(d.key, d.value);
     }
@@ -398,6 +557,10 @@ class BudgetRepository {
     reminders: ReminderSettings(
       logSpends: r.remindLogSpends,
       logAtMinutes: r.remindLogAt,
+      payday: r.remindPayday,
+      paydayAtMinutes: r.remindPaydayAt,
+      debtsOwedToYou: r.remindDebtsOwed,
+      debtsYouOwe: r.remindDebtsYouOwe,
       billsDue: r.remindBills,
       latePause: r.remindLatePause,
       recaps: r.remindRecaps,

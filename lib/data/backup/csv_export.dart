@@ -7,7 +7,6 @@ String entriesToCsv(BudgetSnapshot s) {
   final currency = s.settings?.currency.code ?? '';
   final categories = {for (final c in s.categories) c.id: c.name};
   final bills = {for (final b in s.bills) b.id: b.name};
-  final partner = s.split?.personName;
   final entries = List.of(s.entries)
     ..sort((a, b) {
       final byDate = b.localDate.compareTo(a.localDate);
@@ -44,7 +43,7 @@ String entriesToCsv(BudgetSnapshot s) {
           null => '',
         },
         e.note ?? '',
-        e.splitId != null ? (partner ?? 'Yes') : '',
+        e.splitId == null ? '' : (s.splits.group(e.splitId!)?.name ?? 'Yes'),
         e.toVault
             ? 'Deposit'
             : e.fromVault

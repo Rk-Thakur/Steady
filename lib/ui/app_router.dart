@@ -56,9 +56,15 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     Routes.todayLoading => const _Standalone(TodayLoadingBody()),
     Routes.todayCatchUp => const _Standalone(_CatchUpPreview()),
     Routes.paidPrompt => const _Standalone(PaidPromptBody()),
-    Routes.splitSetup => const SplitSetupScreen(),
+    Routes.splitSetup => SplitSetupScreen(
+      groupId: args is String ? args : null,
+    ),
     Routes.splits => const SplitsScreen(),
-    Routes.settleUp => const SettleUpScreen(),
+    Routes.settleUp => SettleUpScreen(personId: args is String ? args : ''),
+    Routes.splitGroup => SplitGroupScreen(groupId: args is String ? args : ''),
+    Routes.groupExpense => GroupExpenseScreen(
+      groupId: args is String ? args : '',
+    ),
     Routes.settings => const SettingsScreen(),
     Routes.profile => const ProfileScreen(),
     Routes.reminders => const RemindersScreen(),

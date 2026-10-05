@@ -18,9 +18,10 @@ void main() {
       File('assets/fonts/Manrope.ttf').readAsBytesSync().buffer.asByteData(),
     ),
     heading: pw.Font.ttf(
-      File(
-        'assets/fonts/BricolageGrotesque.ttf',
-      ).readAsBytesSync().buffer.asByteData(),
+      File('assets/fonts/BricolageGrotesque.ttf')
+          .readAsBytesSync()
+          .buffer
+          .asByteData(),
     ),
   );
   BudgetStore store() =>

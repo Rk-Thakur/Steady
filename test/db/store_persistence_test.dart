@@ -153,25 +153,30 @@ void main() {
     },
   );
 
-  test('splits: shared expenses and settle-up persist', () async {
+  test('split groups: expenses and settle-up persist', () async {
     var store = await launchWithSample();
-    expect(store.splitBalanceCents, 6450);
-    store.addSharedExpense(
-      SharedExpense(
-        id: 'new',
-        name: 'Pizza',
-        amountCents: 3000,
-        date: oct2,
-        paidByYou: true,
-      ),
+    int owes(BudgetStore s, String id) =>
+        s.splitBalances.firstWhere((b) => b.personId == id).net;
+    // The design's "Alex owes you $64.50" survives the move to groups.
+    expect(owes(store, 'person-split'), 6450);
+
+    store.addGroupExpense(
+      groupId: 'split',
+      name: 'Pizza',
+      amountCents: 3000,
+      date: oct2,
+      paidBy: youId,
+      shares: const {youId: 1800, 'person-split': 1200},
     );
     store = await restart(store);
-    expect(store.sharedExpenses.length, 5);
+    expect(owes(store, 'person-split'), 6450 + 1200);
 
-    store.settleUp();
+    store.settleUpWith('person-split');
     store = await restart(store);
-    expect(store.sharedExpenses, isEmpty);
-    expect(store.split!.lastSettled, oct2);
+    expect(
+      store.splitBalances.where((b) => b.personId == 'person-split'),
+      isEmpty,
+    );
   });
 
   test('an overspend decision persists', () async {
@@ -234,7 +239,7 @@ void main() {
     expect(store.entries, isEmpty);
     expect(store.bills, isEmpty);
     expect(store.goals, isEmpty);
-    expect(store.split, isNull);
+    expect(store.splits.isEmpty, isTrue);
     expect(pins.value, isNull);
   });
 

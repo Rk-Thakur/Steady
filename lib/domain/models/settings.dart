@@ -46,10 +46,14 @@ class ReminderSettings {
   const ReminderSettings({
     this.logSpends = true,
     this.logAtMinutes = 20 * 60 + 30,
+    this.payday = true,
+    this.paydayAtMinutes = 9 * 60,
     this.billsDue = true,
     this.latePause = true,
     this.recaps = false,
     this.backupMonthly = true,
+    this.debtsOwedToYou = true,
+    this.debtsYouOwe = false,
     this.quietFromMinutes = 23 * 60,
   });
 
@@ -58,6 +62,11 @@ class ReminderSettings {
 
   /// Minutes after midnight, e.g. 1230 = 8:30 PM.
   final int logAtMinutes;
+
+  /// "Payday today?" on the morning of a regular payday, at
+  /// [paydayAtMinutes] (minutes after midnight).
+  final bool payday;
+  final int paydayAtMinutes;
   final bool billsDue;
   final bool latePause;
   final bool recaps;
@@ -65,38 +74,69 @@ class ReminderSettings {
   /// Backup & export: "A local notification on the 1st".
   final bool backupMonthly;
 
+  /// Split groups: "Sam owes you $30" when someone owes you
+  /// [debtMinimumCents]+ for [debtFirstAfterDays] days, then weekly.
+  final bool debtsOwedToYou;
+
+  /// …and the same for what you owe others (off by default).
+  final bool debtsYouOwe;
+
+  static const debtMinimumCents = 500;
+  static const debtFirstAfterDays = 7;
+
   /// Quiet hours run from here to 7 AM. 0 = midnight.
   final int quietFromMinutes;
 
   static const quietEndMinutes = 7 * 60;
 
-  bool get anyOn =>
-      logSpends || billsDue || latePause || recaps || backupMonthly;
+  bool get anyOn => onCount > 0;
+
+  /// How many reminders are on (Settings shows "4 on").
+  int get onCount => [
+    logSpends,
+    payday,
+    billsDue,
+    latePause,
+    recaps,
+    backupMonthly,
+    debtsOwedToYou,
+    debtsYouOwe,
+  ].where((on) => on).length;
 
   ReminderSettings copyWith({
     bool? logSpends,
     int? logAtMinutes,
+    bool? payday,
+    int? paydayAtMinutes,
     bool? billsDue,
     bool? latePause,
     bool? recaps,
     bool? backupMonthly,
+    bool? debtsOwedToYou,
+    bool? debtsYouOwe,
     int? quietFromMinutes,
   }) => ReminderSettings(
     logSpends: logSpends ?? this.logSpends,
     logAtMinutes: logAtMinutes ?? this.logAtMinutes,
+    payday: payday ?? this.payday,
+    paydayAtMinutes: paydayAtMinutes ?? this.paydayAtMinutes,
     billsDue: billsDue ?? this.billsDue,
     latePause: latePause ?? this.latePause,
     recaps: recaps ?? this.recaps,
     backupMonthly: backupMonthly ?? this.backupMonthly,
+    debtsOwedToYou: debtsOwedToYou ?? this.debtsOwedToYou,
+    debtsYouOwe: debtsYouOwe ?? this.debtsYouOwe,
     quietFromMinutes: quietFromMinutes ?? this.quietFromMinutes,
   );
 
   static const off = ReminderSettings(
     logSpends: false,
+    payday: false,
     billsDue: false,
     latePause: false,
     recaps: false,
     backupMonthly: false,
+    debtsOwedToYou: false,
   );
 }
 

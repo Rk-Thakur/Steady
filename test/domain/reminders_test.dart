@@ -62,18 +62,32 @@ void main() {
         DateTime(2026, 10, 3, 13),
       );
     });
+  });
 
-    test('asks about regular pay on payday, not for pay that varies', () {
-      final p = plan(on).where((n) => n.kind == ReminderKind.payday);
-      expect(p.single.at, DateTime(2026, 10, 15, 9));
-      expect(p.single.route, Routes.paidPrompt);
-      expect(
-        plan(
-          on,
-          pay: PayFrequency.varies,
-        ).where((n) => n.kind == ReminderKind.payday),
-        isEmpty,
-      );
+  group('payday reminder', () {
+    final on = allOff.copyWith(payday: true);
+    Iterable<PlannedNotification> payday(
+      ReminderSettings r, {
+      PayFrequency pay = PayFrequency.monthly,
+    }) => plan(r, pay: pay).where((n) => n.kind == ReminderKind.payday);
+
+    test('on the morning of a regular payday, 9 AM by default', () {
+      expect(payday(on).single.at, DateTime(2026, 10, 15, 9));
+      expect(payday(on).single.route, Routes.paidPrompt);
+    });
+
+    test('at the time you choose', () {
+      final p = payday(on.copyWith(paydayAtMinutes: 7 * 60 + 30));
+      expect(p.single.at, DateTime(2026, 10, 15, 7, 30));
+    });
+
+    test('its own switch: independent of "Log your spends"', () {
+      expect(payday(allOff.copyWith(logSpends: true)), isEmpty);
+      expect(payday(on), hasLength(1));
+    });
+
+    test('none for pay that varies (no fixed payday)', () {
+      expect(payday(on, pay: PayFrequency.varies), isEmpty);
     });
   });
 
@@ -194,6 +208,66 @@ void main() {
     }
   });
 
+  group('debt reminders', () {
+    final on = allOff.copyWith(debtsOwedToYou: true);
+    DebtReminder sam({
+      int cents = 3000,
+      bool owedToYou = true,
+      LocalDate since = const LocalDate(2026, 9, 30),
+      bool muted = false,
+      LocalDate? snoozedUntil,
+    }) => DebtReminder(
+      personId: 'person-sam',
+      name: 'Sam',
+      cents: cents,
+      owedToYou: owedToYou,
+      since: since,
+      groups: 'Goa trip',
+      muted: muted,
+      snoozedUntil: snoozedUntil,
+    );
+    List<PlannedNotification> debts(ReminderSettings r, List<DebtReminder> d) =>
+        planNotifications(
+          now: now,
+          settings: settings(r),
+          bills: const [],
+          loggedToday: false,
+          debts: d,
+        ).where((n) => n.kind == ReminderKind.debt).toList();
+
+    test('a week after the oldest expense, then weekly, at your time', () {
+      final p = debts(on, [sam()]);
+      expect(p.map((n) => n.at), [
+        DateTime(2026, 10, 7, 20, 30),
+        DateTime(2026, 10, 14, 20, 30),
+      ]);
+      expect(p.first.title, r'Sam owes you $30.00');
+      expect(p.first.body, startsWith('Goa trip · since Sep 30'));
+      expect(p.first.route, '/splits/settle#person-sam');
+    });
+
+    test('long overdue keeps the weekly rhythm', () {
+      // Since Sep 1 → first Sep 8, then 15, 22, 29, Oct 6, 13…
+      final p = debts(on, [sam(since: const LocalDate(2026, 9, 1))]);
+      expect(p.first.at, DateTime(2026, 10, 6, 20, 30));
+    });
+
+    test('skips small amounts, muted people and snoozed weeks', () {
+      expect(debts(on, [sam(cents: 499)]), isEmpty);
+      expect(debts(on, [sam(muted: true)]), isEmpty);
+      final snoozed = debts(on, [
+        sam(snoozedUntil: const LocalDate(2026, 10, 10)),
+      ]);
+      expect(snoozed.map((n) => n.at), [DateTime(2026, 10, 14, 20, 30)]);
+    });
+
+    test('"you owe" only when switched on', () {
+      expect(debts(on, [sam(owedToYou: false)]), isEmpty);
+      final p = debts(on.copyWith(debtsYouOwe: true), [sam(owedToYou: false)]);
+      expect(p.first.title, r'You owe Sam $30.00');
+    });
+  });
+
   test('routes match the app routes', () {
     expect(ReminderRoutes.logSpend, Routes.logSpend);
     expect(ReminderRoutes.paidPrompt, Routes.paidPrompt);
@@ -202,5 +276,6 @@ void main() {
     expect(ReminderRoutes.summaryWeek, Routes.summaryWeek);
     expect(ReminderRoutes.summaryMonth, Routes.summaryMonth);
     expect(ReminderRoutes.backup, Routes.backup);
+    expect(ReminderRoutes.settleUp, Routes.settleUp);
   });
 }

@@ -17,6 +17,37 @@ enum ReminderKind {
   weeklyRecap,
   monthlyRecap,
   backup,
+  debt,
+}
+
+/// Money outstanding with one person, for "Sam owes you $30" reminders.
+@immutable
+class DebtReminder {
+  const DebtReminder({
+    required this.personId,
+    required this.name,
+    required this.cents,
+    required this.owedToYou,
+    required this.since,
+    required this.groups,
+    this.muted = false,
+    this.snoozedUntil,
+  });
+
+  final String personId;
+  final String name;
+  final int cents;
+
+  /// True: they owe you. False: you owe them.
+  final bool owedToYou;
+
+  /// The oldest expense behind it; the first reminder is a week later.
+  final LocalDate since;
+
+  /// "Flat 4B and Goa trip".
+  final String groups;
+  final bool muted;
+  final LocalDate? snoozedUntil;
 }
 
 @immutable
@@ -62,6 +93,7 @@ List<PlannedNotification> planNotifications({
   required AppSettings settings,
   required List<Bill> bills,
   required bool loggedToday,
+  List<DebtReminder> debts = const [],
   int days = 14,
   int max = 60,
 }) {
@@ -112,17 +144,19 @@ List<PlannedNotification> planNotifications({
         ReminderRoutes.logSpend,
       );
     }
-    // Regular pay: ask on payday (pay that varies starts cycles by itself).
-    if (settings.payFrequency != PayFrequency.varies &&
-        settings.nextPayday.isBefore(horizon)) {
-      add(
-        ReminderKind.payday,
-        at(settings.nextPayday, 9 * 60),
-        'Payday today?',
-        'Log your pay when it arrives to start your new cycle.',
-        ReminderRoutes.paidPrompt,
-      );
-    }
+  }
+
+  // Regular pay: ask on payday (pay that varies starts cycles by itself).
+  if (r.payday &&
+      settings.payFrequency != PayFrequency.varies &&
+      settings.nextPayday.isBefore(horizon)) {
+    add(
+      ReminderKind.payday,
+      at(settings.nextPayday, r.paydayAtMinutes),
+      'Payday today?',
+      'Log your pay when it arrives to start your new cycle.',
+      ReminderRoutes.paidPrompt,
+    );
   }
 
   if (r.billsDue) {
@@ -209,6 +243,36 @@ List<PlannedNotification> planNotifications({
     }
   }
 
+  // Money owed between you and someone: a week after the oldest expense
+  // behind it, then weekly, at your usual reminder time.
+  for (final d in debts) {
+    final wanted = d.owedToYou ? r.debtsOwedToYou : r.debtsYouOwe;
+    if (!wanted || d.muted || d.cents < ReminderSettings.debtMinimumCents) {
+      continue;
+    }
+    var day = d.since.addDays(ReminderSettings.debtFirstAfterDays);
+    if (day.isBefore(today)) {
+      // Keep the weekly rhythm from the first reminder.
+      day = day.addDays((day.daysUntil(today) + 6) ~/ 7 * 7);
+    }
+    for (; day.isBefore(horizon); day = day.addDays(7)) {
+      final snoozed = d.snoozedUntil;
+      if (snoozed != null && day.isBefore(snoozed)) continue;
+      add(
+        ReminderKind.debt,
+        at(day, r.logAtMinutes),
+        d.owedToYou
+            ? '${d.name} owes you ${money(d.cents)}'
+            : 'You owe ${d.name} ${money(d.cents)}',
+        d.owedToYou
+            ? '${d.groups} · since ${formatShortDate(d.since)}. Settle up or '
+                  'send a friendly nudge.'
+            : '${d.groups} · since ${formatShortDate(d.since)}.',
+        '${ReminderRoutes.settleUp}${ReminderRoutes.argSeparator}${d.personId}',
+      );
+    }
+  }
+
   out.sort((a, b) => a.at.compareTo(b.at));
   return out.length > max ? out.sublist(0, max) : out;
 }
@@ -238,4 +302,8 @@ abstract final class ReminderRoutes {
   static const summaryWeek = '/summary/week';
   static const summaryMonth = '/summary/month';
   static const backup = '/settings/backup';
+  static const settleUp = '/splits/settle';
+
+  /// "route#argument": a route that needs an id (e.g. which person).
+  static const argSeparator = '#';
 }

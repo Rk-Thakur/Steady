@@ -276,6 +276,8 @@ void main() {
           logAtMinutes: 13 * 60,
           recaps: true,
           quietFromMinutes: 0,
+          payday: false,
+          paydayAtMinutes: 7 * 60,
         ),
       ),
     );
@@ -285,6 +287,8 @@ void main() {
     expect(r.logAtMinutes, 13 * 60);
     expect(r.recaps, isTrue);
     expect(r.quietFromMinutes, 0);
+    expect(r.payday, isFalse);
+    expect(r.paydayAtMinutes, 7 * 60);
     expect(r.billsDue, isTrue);
   });
 }

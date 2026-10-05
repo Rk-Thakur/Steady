@@ -55,7 +55,6 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
       categoryId: _categoryId,
       mood: _mood,
       planned: _planned,
-      splitId: widget.args.shared ? store.split?.id : null,
     );
   }
 
@@ -64,17 +63,6 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
     final entry = _draft(store.newId('entry'));
     if (entry == null) return;
     store.addEntry(entry);
-    if (widget.args.shared && store.split != null) {
-      store.addSharedExpense(
-        SharedExpense(
-          id: store.newId('shared'),
-          name: entry.merchant ?? 'Shared expense',
-          amountCents: entry.amountCents,
-          date: entry.localDate,
-          paidByYou: true,
-        ),
-      );
-    }
     Navigator.of(context).pop();
   }
 
@@ -88,7 +76,6 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
         ? null
         : store.previewWith(draft).safeToSpendCents;
     final categories = store.categories.where((c) => c.id != 'bills').toList();
-    final split = store.split;
 
     return SteadyPage(
       title: 'Log spend',
@@ -131,14 +118,6 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
             }
           },
         ),
-        if (widget.args.shared && split != null)
-          SoftBanner(
-            icon: Icons.people_outline_rounded,
-            child: Text(
-              'Shared with ${split.personName} · you pay '
-              '${split.yourSharePercent}%, they pay ${split.theirSharePercent}%',
-            ),
-          ),
         SteadyField(
           label: 'Amount',
           amount: true,

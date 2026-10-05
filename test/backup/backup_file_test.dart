@@ -12,6 +12,7 @@ import 'package:steady/data/db/budget_repository.dart';
 import 'package:steady/data/db/database.dart';
 import 'package:steady/data/db/database_key.dart';
 import 'package:steady/domain/models/models.dart';
+import 'package:steady/domain/split_math.dart';
 
 /// Handoff 4: ".steady file = versioned JSON, AES-256-GCM, key derived from
 /// the user's password (Argon2id). Never written anywhere automatically."
@@ -47,8 +48,45 @@ void main() {
         jsonEncode(BackupCodec.encode(original)),
       );
       expect(back.entries.length, original.entries.length);
-      expect(back.split!.personName, 'Alex');
+      expect(back.splits.groups.map((g) => g.name), ['You & Alex', 'Flat 4B']);
+      expect(back.splits.expenses.length, original.splits.expenses.length);
       expect(back.vault!.lastReleaseDate, original.vault!.lastReleaseDate);
+    });
+
+    test('a backup from before split groups restores into a group', () {
+      final json =
+          jsonDecode(jsonEncode(BackupCodec.encode(sample())))
+                as Map<String, Object?>
+            ..remove('splits')
+            ..['split'] = {
+              'id': 'split',
+              'personName': 'Alex',
+              'yourSharePercent': 60,
+              'method': 'byIncome',
+              'lastSettled': '2026-09-15',
+            }
+            ..['sharedExpenses'] = [
+              {
+                'id': 's1',
+                'name': 'Groceries',
+                'amountCents': 11240,
+                'date': '2026-09-30',
+                'paidByYou': true,
+              },
+              {
+                'id': 's4',
+                'name': 'Electric',
+                'amountCents': 9150,
+                'date': '2026-09-26',
+                'paidByYou': false,
+              },
+            ];
+      final back = BackupCodec.decode(json);
+      expect(back.splits.groups.single.name, 'You & Alex');
+      expect(back.splits.people.single.name, 'Alex');
+      // Same rule as before: Alex owes 44.96, you owe 54.90.
+      final alex = personBalances(back.splits).single;
+      expect(alex.net, 4496 - 5490);
     });
 
     test('never contains the App lock PIN', () {
@@ -281,8 +319,6 @@ void main() {
         bills: const [],
         goals: const [],
         vault: s.vault,
-        split: null,
-        sharedExpenses: const [],
         overspendDecisions: const {},
       );
       final row = entriesToCsv(tricky).split('\r\n')[1];

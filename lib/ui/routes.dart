@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 import '../core/local_date.dart';
 
 /// Route names for every screen on the design canvas.
@@ -28,7 +30,15 @@ abstract final class Routes {
   // Splits
   static const splitSetup = '/splits/setup';
   static const splits = '/splits';
+
+  /// Arguments: the person's id.
   static const settleUp = '/splits/settle';
+
+  /// Arguments: the group's id.
+  static const splitGroup = '/splits/group';
+
+  /// Arguments: the group's id.
+  static const groupExpense = '/splits/group/expense';
 
   // Settings & profile
   static const settings = '/settings';
@@ -61,17 +71,11 @@ abstract final class Routes {
   static const gallery = '/debug/screens';
 }
 
-/// Prefill for Log spend (from Can I afford it? or Add shared).
+/// Prefill for Log spend (from Can I afford it? or catch-up).
 class LogSpendArgs {
-  const LogSpendArgs({
-    this.amountCents,
-    this.merchant,
-    this.shared = false,
-    this.date,
-  });
+  const LogSpendArgs({this.amountCents, this.merchant, this.date});
   final int? amountCents;
   final String? merchant;
-  final bool shared;
 
   /// Log for an earlier day (catch-up). Defaults to today.
   final LocalDate? date;
@@ -96,4 +100,15 @@ class GoalNewArgs {
   const GoalNewArgs({this.name, this.targetCents});
   final String? name;
   final int? targetCents;
+}
+
+/// Opens a reminder's link: a route name, or "route#argument" for screens
+/// that need an id (e.g. which person to settle up with).
+void openRouteLink(NavigatorState nav, String link) {
+  final i = link.indexOf('#');
+  if (i < 0) {
+    nav.pushNamed(link);
+  } else {
+    nav.pushNamed(link.substring(0, i), arguments: link.substring(i + 1));
+  }
 }

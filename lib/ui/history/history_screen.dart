@@ -141,8 +141,8 @@ class HistoryRow extends StatelessWidget {
       ],
       if (entry.isSpend && cat != null) cat.name,
       if (entry.mood != null) entry.mood!.label,
-      if (entry.splitId != null && store.split != null)
-        'shared with ${store.split!.personName}',
+      if (entry.splitId != null)
+        'shared · ${store.splits.group(entry.splitId!)?.name ?? 'split'}',
       if (entry.isSpend && entry.planned == false && entry.mood == null)
         'unplanned',
       if (entry.isSpend && entry.planned == true && entry.splitId == null)

@@ -30,8 +30,12 @@ part 'database.g.dart';
     Bills,
     Goals,
     Vaults,
-    Splits,
-    SharedExpenses,
+    SplitPeople,
+    SplitGroups,
+    SplitGroupMembers,
+    GroupExpenses,
+    GroupExpenseShares,
+    SplitSettlements,
     OverspendDecisions,
     DailyNumbers,
   ],
@@ -40,7 +44,7 @@ class SteadyDatabase extends _$SteadyDatabase {
   SteadyDatabase(super.executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -119,6 +123,58 @@ class SteadyDatabase extends _$SteadyDatabase {
           schema.settingsRows.biometricUnlock,
         );
       },
+      from7To8: (m, schema) async {
+        final s = schema.settingsRows;
+        await m.addColumn(s, s.remindPayday);
+        await m.addColumn(s, s.remindPaydayAt);
+        // Until now the payday reminder came with "Log your spends": keep it
+        // off for anyone who had turned that off.
+        await customStatement(
+          'UPDATE settings_rows SET remind_payday = remind_log_spends',
+        );
+      },
+      from8To9: (m, schema) async {
+        // One-person split → split groups, keeping every shared expense.
+        for (final t in [
+          schema.splitPeople,
+          schema.splitGroups,
+          schema.splitGroupMembers,
+          schema.groupExpenses,
+          schema.groupExpenseShares,
+          schema.splitSettlements,
+        ]) {
+          await m.createTable(t);
+        }
+        final st = schema.settingsRows;
+        await m.addColumn(st, st.remindDebtsOwed);
+        await m.addColumn(st, st.remindDebtsYouOwe);
+
+        final old = await customSelect('SELECT * FROM splits').get();
+        if (old.isNotEmpty) {
+          final split = old.first;
+          final shared = await customSelect('SELECT * FROM shared_expenses')
+              .get();
+          final book = SplitBook.fromLegacy(
+            splitId: split.read<String>('id'),
+            personName: split.read<String>('person_name'),
+            yourSharePercent: split.read<int>('your_share_percent'),
+            legacyMethod: split.read<String>('method'),
+            expenses: [
+              for (final e in shared)
+                (
+                  id: e.read<String>('id'),
+                  name: e.read<String>('name'),
+                  amountCents: e.read<int>('amount_cents'),
+                  date: LocalDate.parse(e.read<String>('date')),
+                  paidByYou: e.read<bool>('paid_by_you'),
+                ),
+            ],
+          );
+          await _insertSplitBookV9(this, book);
+        }
+        await m.deleteTable('splits');
+        await m.deleteTable('shared_expenses');
+      },
     ),
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -170,6 +226,16 @@ class SettingsRows extends Table {
   BoolColumn get remindBackup => boolean().withDefault(const Constant(true))();
   IntColumn get quietFrom => integer().withDefault(const Constant(1380))();
 
+  /// v8: the payday reminder has its own switch and time.
+  BoolColumn get remindPayday => boolean().withDefault(const Constant(true))();
+  IntColumn get remindPaydayAt => integer().withDefault(const Constant(540))();
+
+  /// v9: debt reminders (someone owes you / you owe someone).
+  BoolColumn get remindDebtsOwed =>
+      boolean().withDefault(const Constant(true))();
+  BoolColumn get remindDebtsYouOwe =>
+      boolean().withDefault(const Constant(false))();
+
   /// v7: App lock also opens with Face ID / fingerprint.
   BoolColumn get biometricUnlock =>
       boolean().withDefault(const Constant(false))();
@@ -198,20 +264,6 @@ class Vaults extends Table {
 
   /// v2: Monday of the latest steady-pay release.
   TextColumn get lastReleaseDate =>
-      text().map(const LocalDateConverter()).nullable()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
-@DataClassName('SplitRow')
-class Splits extends Table {
-  TextColumn get id => text()();
-  TextColumn get personName => text()();
-  IntColumn get yourSharePercent =>
-      integer().check(yourSharePercent.isBetweenValues(0, 100))();
-  TextColumn get method => textEnum<SplitMethod>()();
-  TextColumn get lastSettled =>
       text().map(const LocalDateConverter()).nullable()();
 
   @override
@@ -308,18 +360,6 @@ class Goals extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DataClassName('SharedExpenseRow')
-class SharedExpenses extends Table {
-  TextColumn get id => text()();
-  TextColumn get name => text()();
-  IntColumn get amountCents => integer()();
-  TextColumn get date => text().map(const LocalDateConverter())();
-  BoolColumn get paidByYou => boolean()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
 /// S4: how a given day's overspend was handled.
 @DataClassName('OverspendDecisionRow')
 class OverspendDecisions extends Table {
@@ -344,4 +384,126 @@ class DailyNumbers extends Table {
 
   @override
   Set<Column> get primaryKey => {localDate};
+}
+
+// ─── Split groups (v9) ─────────────────────────────────────────────────────
+
+/// Someone you split with. Their name is all Steady knows.
+@DataClassName('SplitPersonRow')
+class SplitPeople extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  BoolColumn get remindMuted => boolean().withDefault(const Constant(false))();
+  TextColumn get remindSnoozedUntil =>
+      text().map(const LocalDateConverter()).nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('SplitGroupRow')
+class SplitGroups extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get method => textEnum<SplitMethod>()();
+  BoolColumn get simplifyDebts => boolean().withDefault(const Constant(true))();
+  TextColumn get createdOn =>
+      text().map(const LocalDateConverter()).nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Who's in a group; [weight] is their by-income percentage. "me" (you) has
+/// a row too when the group splits by income.
+@DataClassName('SplitGroupMemberRow')
+class SplitGroupMembers extends Table {
+  TextColumn get groupId => text()();
+  TextColumn get personId => text()();
+  IntColumn get weight => integer().withDefault(const Constant(0))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {groupId, personId};
+}
+
+@DataClassName('GroupExpenseRow')
+class GroupExpenses extends Table {
+  TextColumn get id => text()();
+  TextColumn get groupId => text()();
+  TextColumn get name => text()();
+  IntColumn get amountCents => integer()();
+  TextColumn get date => text().map(const LocalDateConverter())();
+  TextColumn get paidBy => text()();
+  TextColumn get entryId => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Each person's exact share of an expense (they add up to the amount).
+@DataClassName('GroupExpenseShareRow')
+class GroupExpenseShares extends Table {
+  TextColumn get expenseId => text()();
+  TextColumn get personId => text()();
+  IntColumn get shareCents => integer()();
+
+  @override
+  Set<Column> get primaryKey => {expenseId, personId};
+}
+
+@DataClassName('SplitSettlementRow')
+class SplitSettlements extends Table {
+  TextColumn get id => text()();
+  TextColumn get groupId => text()();
+  TextColumn get fromId => text()();
+  TextColumn get toId => text()();
+  IntColumn get amountCents => integer()();
+  TextColumn get date => text().map(const LocalDateConverter())();
+  TextColumn get entryId => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Writes [book] into the v9 split tables with plain SQL, so this migration
+/// step keeps working even if the tables change in a later version.
+Future<void> _insertSplitBookV9(GeneratedDatabase db, SplitBook book) async {
+  Future<void> run(String sql, List<Object?> args) =>
+      db.customStatement(sql, args);
+  for (final p in book.people) {
+    await run('INSERT INTO split_people (id, name) VALUES (?, ?)', [
+      p.id,
+      p.name,
+    ]);
+  }
+  for (final g in book.groups) {
+    await run(
+      'INSERT INTO split_groups (id, name, method, simplify_debts) '
+      'VALUES (?, ?, ?, 1)',
+      [g.id, g.name, g.method.name],
+    );
+    for (final (i, id) in g.everyone.indexed) {
+      await run(
+        'INSERT INTO split_group_members (group_id, person_id, weight, '
+        'sort_order) VALUES (?, ?, ?, ?)',
+        [g.id, id, g.weights[id] ?? 0, i],
+      );
+    }
+  }
+  for (final e in book.expenses) {
+    await run(
+      'INSERT INTO group_expenses (id, group_id, name, amount_cents, date, '
+      'paid_by) VALUES (?, ?, ?, ?, ?, ?)',
+      [e.id, e.groupId, e.name, e.amountCents, e.date.toIso(), e.paidBy],
+    );
+    for (final share in e.shares.entries) {
+      await run(
+        'INSERT INTO group_expense_shares (expense_id, person_id, '
+        'share_cents) VALUES (?, ?, ?)',
+        [e.id, share.key, share.value],
+      );
+    }
+  }
 }
