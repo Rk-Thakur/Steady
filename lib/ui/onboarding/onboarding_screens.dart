@@ -577,6 +577,17 @@ class _OnbMoneyScreenState extends State<OnbMoneyScreen> {
             ),
           ],
         ),
+        // The first number is only as right as this: say what to count.
+        SoftBanner(
+          icon: Icons.info_outline_rounded,
+          child: LeadText(
+            lead: 'Count only money you spend from:',
+            body:
+                'your everyday account and cash. Leave out savings you want '
+                'to keep, like an emergency fund. You can add those as a goal '
+                'later.',
+          ),
+        ),
         Panel(
           padding: const EdgeInsets.fromLTRB(
             SteadySpace.s4,
@@ -608,6 +619,11 @@ class _OnbMoneyScreenState extends State<OnbMoneyScreen> {
                     ),
                   ],
                 ),
+              ),
+              Text(
+                "Only bills due before your next payday that you haven't "
+                'paid yet.',
+                style: SteadyType.caption.copyWith(color: c.muted),
               ),
               for (final b in bills) ...[
                 ValueRow(

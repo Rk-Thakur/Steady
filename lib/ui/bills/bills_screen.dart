@@ -4,6 +4,7 @@ import '../../core/date_format.dart';
 import '../../core/local_date.dart';
 import '../../core/money.dart';
 import '../../data/store_scope.dart';
+import '../../domain/after_payday.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
@@ -35,6 +36,7 @@ class _BillsScreenState extends State<BillsScreen> {
     final upcoming = store.upcomingBills
         .where((b) => !review.contains(b))
         .toList();
+    final afterPayday = store.billsRightAfterNextPayday;
     String m(int cents) => formatMoney(cents, symbol: symbol);
 
     return TabBody(
@@ -164,6 +166,44 @@ class _BillsScreenState extends State<BillsScreen> {
             ],
           ],
         ),
+        if (afterPayday.isNotEmpty)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Right after payday', style: SteadyType.heading),
+              const SizedBox(height: SteadySpace.s1),
+              Text(
+                "Not set aside from this cycle's money, so they don't lower "
+                'your daily number. They come out of your next pay. If it '
+                'could land late, keep '
+                '${m(afterPayday.fold(0, (sum, b) => sum + b.amountCents))} '
+                'in your account until it does.',
+                style: SteadyType.caption.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: c.muted,
+                ),
+              ),
+              for (var i = 0; i < afterPayday.length; i++) ...[
+                if (i > 0) Divider(color: c.line, height: 1),
+                InkWell(
+                  onTap: () => Navigator.of(context)
+                      .pushNamed(Routes.billEdit, arguments: afterPayday[i].id),
+                  child: ValueRow(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    label: afterPayday[i].name,
+                    labelWidget: NameMeta(
+                      name: afterPayday[i].name,
+                      meta:
+                          '${formatShortDate(afterPayday[i].dueDate)} · '
+                          '${afterPaydayLabel(afterPayday[i].dueDate, payday)}',
+                    ),
+                    value:
+                        '${afterPayday[i].isEstimate ? '~' : ''}${m(afterPayday[i].amountCents)}',
+                  ),
+                ),
+              ],
+            ],
+          ),
       ],
     );
   }

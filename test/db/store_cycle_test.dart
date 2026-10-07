@@ -144,6 +144,39 @@ void main() {
       },
     );
 
+    test(
+      'the cycle summary adds up: left over = goals + carried over',
+      () async {
+        final store = await monthlyUser();
+        final before = {for (final g in store.goals) g.id: g.savedCents};
+        now = store.nextPayday;
+        store.addEntry(pay(300000));
+
+        final s = store.cycleSummary!;
+        expect(s.start, now);
+        expect(s.endedCycleStart, isNot(now));
+        expect(s.carriedOverCents, s.leftOverCents - s.movedToGoalsCents);
+        // What's carried is what the new cycle opens with.
+        expect(s.carriedOverCents, store.dailyInput.moneyAtStartOfDayCents);
+        // Each goal's line is what it actually received.
+        for (final (name, cents) in s.goalsAdded) {
+          final g = store.goals.firstWhere((g) => g.name == name);
+          expect(g.savedCents - before[g.id]!, cents);
+        }
+        expect(s.goalsAdded, isNotEmpty);
+
+        // Shown by itself once; the banner can still reopen it.
+        expect(store.cycleSummaryUnseen, isTrue);
+        store.markCycleSummarySeen();
+        expect(store.cycleSummaryUnseen, isFalse);
+        expect(store.cycleSummary, isNotNull);
+        // Only on the day the cycle started.
+        now = now.addDays(1);
+        expect(store.cycleSummary, isNull);
+        await store.flush();
+      },
+    );
+
     test('"It won\'t come" starts the next cycle without pay', () async {
       final store = await monthlyUser();
       now = store.nextPayday.addDays(2);

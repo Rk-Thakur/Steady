@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/local_date.dart';
 import '../../core/money.dart';
 import '../../data/budget_store.dart';
+import '../../domain/after_payday.dart';
+import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../widgets/steady_card.dart';
 
@@ -14,6 +17,8 @@ class BillsCard extends StatelessWidget {
     required this.reservedCents,
     required this.needsReviewCount,
     required this.symbol,
+    this.afterPayday = const [],
+    this.payday,
     this.onSeeAll,
   });
 
@@ -21,6 +26,10 @@ class BillsCard extends StatelessWidget {
   final int reservedCents;
   final int needsReviewCount;
   final String symbol;
+
+  /// Big bills due on [payday] or just after it (not reserved this cycle).
+  final List<Bill> afterPayday;
+  final LocalDate? payday;
   final VoidCallback? onSeeAll;
 
   @override
@@ -82,6 +91,48 @@ class BillsCard extends StatelessWidget {
               ],
             ),
           ),
+          if (afterPayday.isNotEmpty && payday != null) ...[
+            const SizedBox(height: SteadySpace.s3),
+            Semantics(
+              button: onSeeAll != null,
+              child: InkWell(
+                onTap: onSeeAll,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minHeight: SteadySize.minTouchTarget,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: c.line),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.event_outlined,
+                        size: 18,
+                        color: c.mutedStrong,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _afterPaydayLine(),
+                          style: SteadyType.caption.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: c.ink,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (needsReviewCount > 0) ...[
             const SizedBox(height: SteadySpace.s3),
             Container(
@@ -126,5 +177,19 @@ class BillsCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// "Rent ($1,450.00) is due the day after payday. It comes from your next
+  /// pay." / "2 bills ($1,600.00) are due just after payday. …"
+  String _afterPaydayLine() {
+    final total = afterPayday.fold(0, (sum, b) => sum + b.amountCents);
+    final money = formatMoney(total, symbol: symbol);
+    if (afterPayday.length == 1) {
+      final b = afterPayday.single;
+      return '${b.name} ($money) is due ${afterPaydayLabel(b.dueDate, payday!)}. '
+          'It comes from your next pay.';
+    }
+    return '${afterPayday.length} bills ($money) are due just after payday. '
+        'They come from your next pay.';
   }
 }

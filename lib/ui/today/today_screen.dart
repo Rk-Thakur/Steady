@@ -6,14 +6,18 @@ import '../../core/money.dart';
 import '../../data/store_scope.dart';
 import '../../domain/daily_number.dart';
 import '../../domain/models/models.dart';
+import '../../domain/number_change.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
 import '../widgets/steady_card.dart';
 import '../history/history_screen.dart';
+import '../shell/home_shell.dart';
 import 'bills_card.dart';
+import 'cycle_summary_sheet.dart';
 import 'entry_row.dart';
 import 'hero_card.dart';
+import 'number_change_text.dart';
 import 'today_states.dart';
 
 /// 01 Today · Safe to spend (and S4 Overspent today).
@@ -33,13 +37,34 @@ class TodayScreen extends StatelessWidget {
     // Edge states replace the normal Today layout (Step 4 · Edge states).
     if (store.isNewUser) return TodayEmptyBody(onLogSpend: onLogSpend);
     if (store.isAwaitingPay) return const PaidPromptBody();
-    if (store.missedDays.length >= 2) return const TodayCatchUpBody();
+    if (store.showCatchUp) return const TodayCatchUpBody();
 
     final number = store.dailyNumber;
     final symbol = store.symbol;
     final entries = store.todayEntries;
     final c = context.colors;
-    void showBreakdown() => _showBreakdown(context, number, symbol);
+    final change = store.numberChange;
+    final balances = store.splitBalances;
+    final owedToYou = balances.fold(0, (sum, b) => sum + b.owesYou);
+    final youOwe = balances.fold(0, (sum, b) => sum + b.youOwe);
+    // A cycle just started: show what happened once, when Today is on top
+    // (not under the Log income screen that started it).
+    final summary = store.cycleSummary;
+    if (summary != null &&
+        store.cycleSummaryUnseen &&
+        (ModalRoute.of(context)?.isCurrent ?? true)) {
+      store.markCycleSummarySeen();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        showCycleSummary(
+          context,
+          summary: summary,
+          number: store.dailyNumber,
+          symbol: store.symbol,
+        );
+      });
+    }
+    void showBreakdown() => _showBreakdown(context, number, change, symbol);
 
     // S4 Overspent today: just the fix until the user picks an option.
     if (number.isOverspent && store.overspendHandledOn(store.today) == null) {
@@ -78,12 +103,30 @@ class TodayScreen extends StatelessWidget {
               leadColor: c.dangerFg,
             ),
           ),
+        if (store.missedDays.isNotEmpty)
+          _EstimateBanner(missed: store.missedDays),
         HeroCard(
           number: number,
           payday: store.nextPayday,
           symbol: symbol,
-          onTap: () => _showBreakdown(context, number, symbol),
+          change: change == null
+              ? null
+              : NumberChangeText.headline(change, symbol),
+          onTap: showBreakdown,
         ),
+        if (store.nextVaultRelease case final next?)
+          _VaultStrip(
+            balanceCents: store.vaultBalanceCents,
+            nextDate: next.date,
+            nextCents: next.cents,
+            symbol: symbol,
+          ),
+        if (owedToYou > 0 || youOwe > 0)
+          _SplitsStrip(
+            owedToYouCents: owedToYou,
+            youOweCents: youOwe,
+            symbol: symbol,
+          ),
         if (number.isOverspent) _OverspentFix(number: number, symbol: symbol),
         ButtonRow(
           children: [
@@ -104,6 +147,8 @@ class TodayScreen extends StatelessWidget {
           reservedCents: store.reservedBillsCents,
           needsReviewCount: store.billsNeedingReview,
           symbol: symbol,
+          afterPayday: store.billsRightAfterNextPayday,
+          payday: store.nextPayday,
           onSeeAll: onOpenBills,
         ),
         Column(
@@ -144,11 +189,17 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  void _showBreakdown(BuildContext context, DailyNumber n, String symbol) {
+  void _showBreakdown(
+    BuildContext context,
+    DailyNumber n,
+    NumberChange? change,
+    String symbol,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _BreakdownSheet(number: n, symbol: symbol),
+      builder: (context) =>
+          _BreakdownSheet(number: n, change: change, symbol: symbol),
     );
   }
 }
@@ -342,7 +393,7 @@ class _OverspentFix extends StatelessWidget {
         if (source != null) ...[
           const SizedBox(height: 10),
           SteadyButton(
-            'Take it from ${source.name} money instead',
+            'Cover it from ${source.name} instead',
             kind: ButtonKind.secondary,
             onPressed: () => store.handleOverspend(
               OverspendStrategy.takeFromCategory,
@@ -350,6 +401,21 @@ class _OverspentFix extends StatelessWidget {
               overCents: number.overspentByCents,
             ),
           ),
+          if (sourceLeft != null) ...[
+            const SizedBox(height: SteadySpace.s2),
+            Text(
+              '${source.name} has ${m(sourceLeft)} left of its monthly limit. '
+              'Covering $over from it keeps tomorrow at '
+              '${m(DailyNumberCalculator.tomorrow(number, newCoverCents: number.overspentByCents).safeToSpendCents)} '
+              '(instead of ${m(tomorrow.safeToSpendCents)}), and leaves '
+              '${m(sourceLeft - number.overspentByCents)} for '
+              '${source.name.toLowerCase()} this month.',
+              style: SteadyType.caption.copyWith(
+                fontWeight: FontWeight.w500,
+                color: c.muted,
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -358,9 +424,14 @@ class _OverspentFix extends StatelessWidget {
 
 /// Tap the hero: how today's number was worked out.
 class _BreakdownSheet extends StatelessWidget {
-  const _BreakdownSheet({required this.number, required this.symbol});
+  const _BreakdownSheet({
+    required this.number,
+    required this.change,
+    required this.symbol,
+  });
 
   final DailyNumber number;
+  final NumberChange? change;
   final String symbol;
 
   @override
@@ -368,6 +439,9 @@ class _BreakdownSheet extends StatelessWidget {
     final c = context.colors;
     final i = number.input;
     String m(int cents) => formatMoney(cents, symbol: symbol);
+    String signed(int cents) => cents > 0 ? '+${m(cents)}' : m(cents);
+    final change = this.change;
+    final changed = change != null && !change.isUnchanged;
 
     Widget row(String label, String value, {bool strong = false}) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -404,10 +478,49 @@ class _BreakdownSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('How today\'s number works', style: SteadyType.title),
-              const SizedBox(height: SteadySpace.s3),
+              if (changed) ...[
+                const SizedBox(height: SteadySpace.s3),
+                Text(
+                  'Since yesterday',
+                  style: SteadyType.overline.copyWith(color: c.muted),
+                ),
+                row("Yesterday's number", m(change.yesterdayCents)),
+                for (final (label, cents) in NumberChangeText.parts(
+                  change,
+                  number.daysLeft,
+                ))
+                  row(label, signed(cents)),
+                row(
+                  "Today's number",
+                  m(number.dailyAllowanceCents),
+                  strong: true,
+                ),
+                Text(
+                  'Money you don\'t spend stays in the pot and is shared over '
+                  'the days left, so each day after gets a little more. '
+                  'Spending more works the same way, the other direction.',
+                  style: SteadyType.caption.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: c.muted,
+                  ),
+                ),
+                const SizedBox(height: SteadySpace.s4),
+                Text(
+                  'Worked out',
+                  style: SteadyType.overline.copyWith(color: c.muted),
+                ),
+              ] else
+                const SizedBox(height: SteadySpace.s3),
               row('Money at the start of today', m(i.moneyAtStartOfDayCents)),
               if (i.incomeTodayCents > 0)
                 row('Income logged today', '+${m(i.incomeTodayCents)}'),
+              if (i.coveredCents > 0)
+                row(
+                  'Overspends your categories are covering',
+                  '+${m(i.coveredCents)}',
+                ),
+              if (i.billPaymentsTodayCents > 0)
+                row('Bills paid today', m(-i.billPaymentsTodayCents)),
               row(
                 'Bills due before payday',
                 m(-i.unpaidBillsBeforePaydayCents),
@@ -466,11 +579,26 @@ class _NewCycleBanner extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: LeadText(
-              lead: 'New pay cycle.',
-              body:
-                  '${formatMoney(number.dailyAllowanceCents, symbol: symbol)} a day until '
-                  '${formatShortDay(payday)}. Bills and goals are set aside again.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LeadText(
+                  lead: 'New pay cycle.',
+                  body:
+                      '${formatMoney(number.dailyAllowanceCents, symbol: symbol)} a day until '
+                      '${formatShortDay(payday)}. Bills and goals are set aside again.',
+                ),
+                if (store.cycleSummary case final summary?)
+                  LinkText(
+                    'See what carried over',
+                    onTap: () => showCycleSummary(
+                      context,
+                      summary: summary,
+                      number: number,
+                      symbol: symbol,
+                    ),
+                  ),
+              ],
             ),
           ),
           IconButton(
@@ -478,6 +606,182 @@ class _NewCycleBanner extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.close_rounded, size: 18),
             onPressed: store.dismissNewCycle,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// For Vault users: what's in the Vault and the next Monday release, next
+/// to the number it feeds. Opens the Vault.
+class _VaultStrip extends StatelessWidget {
+  const _VaultStrip({
+    required this.balanceCents,
+    required this.nextDate,
+    required this.nextCents,
+    required this.symbol,
+  });
+  final int balanceCents;
+  final LocalDate nextDate;
+  final int nextCents;
+  final String symbol;
+
+  @override
+  Widget build(BuildContext context) {
+    String whole(int cents) =>
+        formatMoney(cents, symbol: symbol, showCents: false);
+    return _TodayStrip(
+      icon: Icons.savings_outlined,
+      lead: 'Vault ${whole(balanceCents)}',
+      body: nextCents > 0
+          ? ' · ${whole(nextCents)} joins your number '
+                '${formatShortDay(nextDate)}'
+          : ' · empty, nothing to release ${formatShortDay(nextDate)}',
+      onTap: () => goToTab(context, ShellTab.vault),
+    );
+  }
+}
+
+/// Split expenses, next to the number: money owed back isn't in it yet,
+/// and money you owe hasn't come out of it yet. Opens Split expenses.
+class _SplitsStrip extends StatelessWidget {
+  const _SplitsStrip({
+    required this.owedToYouCents,
+    required this.youOweCents,
+    required this.symbol,
+  });
+  final int owedToYouCents;
+  final int youOweCents;
+  final String symbol;
+
+  @override
+  Widget build(BuildContext context) {
+    String m(int cents) => formatMoney(cents, symbol: symbol);
+    final both = owedToYouCents > 0 && youOweCents > 0;
+    return _TodayStrip(
+      icon: Icons.people_outline_rounded,
+      lead: [
+        if (owedToYouCents > 0) '${m(owedToYouCents)} owed back to you',
+        if (youOweCents > 0) '${both ? 'you' : 'You'} owe ${m(youOweCents)}',
+      ].join(' · '),
+      body: both
+          ? '. Each counts in your number once it changes hands.'
+          : owedToYouCents > 0
+          ? ". Not in your number yet; it's added when they pay you back."
+          : '. It comes off your number when you pay.',
+      onTap: () => Navigator.of(context).pushNamed(Routes.splits),
+    );
+  }
+}
+
+/// A one-line, tappable note under the hero.
+class _TodayStrip extends StatelessWidget {
+  const _TodayStrip({
+    required this.icon,
+    required this.lead,
+    required this.body,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String lead;
+  final String body;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: c.surface,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: c.line),
+        borderRadius: BorderRadius.circular(SteadyRadius.lg),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(
+            minHeight: SteadySize.minTouchTarget,
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: SteadySpace.s4,
+            vertical: 12,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: c.mutedStrong),
+              const SizedBox(width: SteadySpace.s3),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: lead,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      TextSpan(
+                        text: body,
+                        style: TextStyle(color: c.muted),
+                      ),
+                    ],
+                  ),
+                  style: SteadyType.caption.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: c.ink,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Days with nothing logged make today's number a guess. One day: answer it
+/// here. More: back to catch-up (after "Not now").
+class _EstimateBanner extends StatelessWidget {
+  const _EstimateBanner({required this.missed});
+  final List<LocalDate> missed;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final c = context.colors;
+    final one = missed.length == 1;
+    final day = one ? formatShortDay(missed.single).substring(0, 3) : '';
+    return SoftBanner(
+      tone: BannerTone.warning,
+      icon: Icons.edit_note_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LeadText(
+            lead: 'Your number is an estimate.',
+            body: one
+                ? 'Nothing is logged for $day, so it assumes you spent '
+                      'nothing then.'
+                : 'Nothing is logged for ${missed.length} days, so it '
+                      'assumes you spent nothing then.',
+            leadColor: c.warningFg,
+          ),
+          Wrap(
+            spacing: SteadySpace.s4,
+            children: one
+                ? [
+                    LinkText(
+                      'Add a spend',
+                      onTap: () => Navigator.of(context).pushNamed(
+                        Routes.logSpend,
+                        arguments: LogSpendArgs(date: missed.single),
+                      ),
+                    ),
+                    LinkText('I spent nothing', onTap: store.markCaughtUp),
+                  ]
+                : [LinkText('Catch up', onTap: store.resumeCatchUp)],
           ),
         ],
       ),

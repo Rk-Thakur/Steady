@@ -28,7 +28,8 @@ void main() {
   }
 
   /// A trip with Sam and Priya, starting from the sample data.
-  Future<(BudgetStore, String sam, String priya, String trip)> setUpTrip() async {
+  Future<(BudgetStore, String sam, String priya, String trip)>
+  setUpTrip() async {
     final store = await launch();
     store.loadSample();
     final sam = store.splits.people.firstWhere((p) => p.name == 'Sam').id;

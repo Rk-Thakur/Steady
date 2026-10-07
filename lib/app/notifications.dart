@@ -26,6 +26,10 @@ abstract class Notifications {
   /// Asks the OS (once; later calls return the answer). True if allowed.
   Future<bool> requestPermission();
 
+  /// Whether notifications are allowed right now, without asking. False
+  /// before the user was ever asked, too.
+  Future<bool> permissionGranted();
+
   /// Replaces everything pending with [plan].
   Future<void> replaceAll(List<PlannedNotification> plan);
 }
@@ -43,6 +47,8 @@ class _NoNotifications implements Notifications {
   Future<String?> launchRoute() async => null;
   @override
   Future<bool> requestPermission() async => false;
+  @override
+  Future<bool> permissionGranted() async => false;
   @override
   Future<void> replaceAll(List<PlannedNotification> plan) async {}
 }
@@ -91,6 +97,26 @@ class LocalNotifications implements Notifications {
     final details = await _plugin.getNotificationAppLaunchDetails();
     if (details?.didNotificationLaunchApp != true) return null;
     return details!.notificationResponse?.payload;
+  }
+
+  @override
+  Future<bool> permissionGranted() async {
+    final ios = _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
+    if (ios != null) {
+      final p = await ios.checkPermissions();
+      return p != null && (p.isEnabled || p.isProvisionalEnabled);
+    }
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (android != null) {
+      return await android.areNotificationsEnabled() ?? false;
+    }
+    return false;
   }
 
   @override

@@ -24,7 +24,13 @@ const _faq = [
   ),
   (
     'What if I forget to log for a few days?',
-    'Your number becomes an estimate until you catch up. Tap Add or Nothing for each missed day.',
+    'Your number becomes an estimate: it assumes you spent nothing on those days. '
+        'Catch up on Today by tapping Add or Nothing for each missed day, and it is exact again.',
+  ),
+  (
+    'What does "estimate" mean on a bill?',
+    'The amount changes each time, like electric. Steady sets aside the last amount, shown with ~. '
+        'When you mark it paid, enter the real amount and it becomes the guess for next time.',
   ),
   (
     'How do I move to a new phone?',

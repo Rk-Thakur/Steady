@@ -158,7 +158,9 @@ class _CategoryEditScreenState extends State<CategoryEditScreen> {
             children: [
               SwitchRow(
                 title: 'Monthly limit',
-                subtitle: 'Warn me as I get close',
+                subtitle:
+                    'A warning when you log a spend that gets close (80%) '
+                    'or goes over. It doesn\'t change your daily number.',
                 value: _limitOn,
                 onChanged: (v) => setState(() => _limitOn = v),
               ),

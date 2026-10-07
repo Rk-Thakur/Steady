@@ -44,7 +44,7 @@ class SteadyDatabase extends _$SteadyDatabase {
   SteadyDatabase(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -175,6 +175,15 @@ class SteadyDatabase extends _$SteadyDatabase {
         await m.deleteTable('splits');
         await m.deleteTable('shared_expenses');
       },
+      from9To10: (m, schema) async {
+        await m.addColumn(schema.goals, schema.goals.cycleSetAsideCents);
+      },
+      from10To11: (m, schema) async {
+        await m.addColumn(
+          schema.settingsRows,
+          schema.settingsRows.caughtUpThrough,
+        );
+      },
     ),
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -213,6 +222,10 @@ class SettingsRows extends Table {
 
   /// v3: when the user last created a .steady backup file.
   TextColumn get lastBackupOn =>
+      text().map(const LocalDateConverter()).nullable()();
+
+  /// v11: catch-up done through this day ("No spends" days included).
+  TextColumn get caughtUpThrough =>
       text().map(const LocalDateConverter()).nullable()();
 
   /// v5: Reminders (see ReminderSettings for meanings and defaults).
@@ -355,6 +368,10 @@ class Goals extends Table {
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   TextColumn get createdOn =>
       text().map(const LocalDateConverter()).nullable()();
+
+  /// Held back this pay cycle (v10). Null for goals saved before that; the
+  /// store gives them their share of the cycle's total when it loads.
+  IntColumn get cycleSetAsideCents => integer().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};

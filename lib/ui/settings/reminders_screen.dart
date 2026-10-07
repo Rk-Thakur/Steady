@@ -24,12 +24,28 @@ class _RemindersScreenState extends State<RemindersScreen> {
   /// Null until asked; false shows how to turn notifications back on.
   bool? _allowed;
 
+  /// Back from the phone's Settings app: notifications may be on now.
+  late final _lifecycle = AppLifecycleListener(onResume: _recheck);
+
   @override
   void initState() {
     super.initState();
+    _lifecycle; // start listening
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (StoreScope.read(context).settings.reminders.anyOn) _askPermission();
     });
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  Future<void> _recheck() async {
+    if (!Notifications.instance.enabled) return;
+    final allowed = await Notifications.instance.permissionGranted();
+    if (mounted) setState(() => _allowed = allowed);
   }
 
   Future<void> _askPermission() async {
@@ -100,7 +116,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
             tone: BannerTone.warning,
             child: LeadText(
               lead: 'Notifications are off for Steady.',
-              body: "Turn them on in your phone's Settings app to get these reminders.",
+              body: Theme.of(context).platform == TargetPlatform.iOS
+                  ? 'To get these reminders, open Settings › Steady › '
+                        'Notifications and turn on Allow Notifications.'
+                  : 'To get these reminders, open Settings › Apps › Steady › '
+                        'Notifications and turn them on.',
               leadColor: c.warningFg,
             ),
           )

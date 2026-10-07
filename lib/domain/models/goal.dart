@@ -24,6 +24,7 @@ class Goal {
     this.targetDate,
     this.paused = false,
     this.createdOn,
+    this.cycleSetAsideCents,
   });
 
   final String id;
@@ -41,6 +42,19 @@ class Goal {
   /// (schema v3), which count as always existing.
   final LocalDate? createdOn;
 
+  /// Held back for this goal in the current pay cycle, out of the daily
+  /// number. It moves into [savedCents] on payday. Null only for goals from
+  /// before this was tracked (schema v9 and older backups); the store fills
+  /// it in from the cycle's total when it loads them.
+  final int? cycleSetAsideCents;
+
+  /// Still needed after what's saved.
+  int get remainingCents =>
+      targetCents > savedCents ? targetCents - savedCents : 0;
+
+  /// Setting money aside every day: not paused and not reached.
+  bool get isActive => !paused && !isReached;
+
   bool get isReached => savedCents >= targetCents;
   double get progress =>
       targetCents == 0 ? 1 : (savedCents / targetCents).clamp(0, 1);
@@ -54,7 +68,12 @@ class Goal {
     return (left + dailySetAsideCents - 1) ~/ dailySetAsideCents;
   }
 
-  Goal copyWith({int? savedCents, bool? paused, int? dailySetAsideCents}) {
+  Goal copyWith({
+    int? savedCents,
+    bool? paused,
+    int? dailySetAsideCents,
+    int? cycleSetAsideCents,
+  }) {
     return Goal(
       id: id,
       name: name,
@@ -65,6 +84,7 @@ class Goal {
       targetDate: targetDate,
       paused: paused ?? this.paused,
       createdOn: createdOn,
+      cycleSetAsideCents: cycleSetAsideCents ?? this.cycleSetAsideCents,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/biometrics.dart';
+import '../../app/notifications.dart';
 import '../../core/date_format.dart';
 import '../../data/store_scope.dart';
 import '../../domain/models/models.dart';
@@ -118,11 +119,8 @@ class SettingsScreen extends StatelessWidget {
         _Group(
           label: 'App',
           children: [
-            NavRow(
-              icon: Icons.notifications_none_rounded,
-              tone: BannerTone.info,
-              label: 'Reminders',
-              value: _remindersOn(s) == 0 ? 'Off' : '${_remindersOn(s)} on',
+            _RemindersRow(
+              on: _remindersOn(s),
               onTap: () => go(Routes.reminders),
             ),
             NavRow(
@@ -169,7 +167,9 @@ class SettingsScreen extends StatelessWidget {
               label: 'App lock',
               subtitle: s.appLockEnabled
                   ? '4-digit PIN · locks after 1 min away'
-                  : 'Ask for a PIN to open Steady',
+                  : 'Keep your money private: a PIN to open Steady, then '
+                        '${Theme.of(context).platform == TargetPlatform.iOS ? 'Face ID' : 'your fingerprint'} '
+                        'if you like',
               trailing: SteadySwitch(
                 value: s.appLockEnabled,
                 label: 'App lock',
@@ -242,6 +242,64 @@ class _Group extends StatelessWidget {
 /// when biometrics aren't set up yet; checked again on returning to the app.
 /// Turning it on asks once, so it's known to work before the lock relies on
 /// it.
+/// Reminders: how many are on, or "Blocked" when the phone has
+/// notifications for Steady turned off (checked again on return from the
+/// Settings app).
+class _RemindersRow extends StatefulWidget {
+  const _RemindersRow({required this.on, required this.onTap});
+  final int on;
+  final VoidCallback onTap;
+
+  @override
+  State<_RemindersRow> createState() => _RemindersRowState();
+}
+
+class _RemindersRowState extends State<_RemindersRow> {
+  late Future<bool> _allowed = Notifications.instance.permissionGranted();
+  late final _lifecycle = AppLifecycleListener(
+    onResume: () =>
+        setState(() => _allowed = Notifications.instance.permissionGranted()),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle; // start listening
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+    future: _allowed,
+    builder: (context, snap) {
+      // Only a phone that can notify can block it (not tests or previews).
+      final blocked =
+          widget.on > 0 && Notifications.instance.enabled && snap.data == false;
+      return NavRow(
+        icon: blocked
+            ? Icons.notifications_off_outlined
+            : Icons.notifications_none_rounded,
+        tone: blocked ? BannerTone.warning : BannerTone.info,
+        label: 'Reminders',
+        subtitle: blocked
+            ? "Notifications are off for Steady in your phone's Settings"
+            : null,
+        value: blocked
+            ? 'Blocked'
+            : widget.on == 0
+            ? 'Off'
+            : '${widget.on} on',
+        onTap: widget.onTap,
+      );
+    },
+  );
+}
+
 class _BiometricRow extends StatefulWidget {
   const _BiometricRow();
 

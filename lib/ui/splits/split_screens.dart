@@ -418,7 +418,10 @@ class _SplitSetupScreenState extends State<SplitSetupScreen> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: SwitchRow(
                 title: 'Simplify debts',
-                subtitle: 'Show the fewest payments that settle everyone',
+                subtitle:
+                    'Show the fewest payments that settle everyone. Someone '
+                    'may pay a person they never split with; totals stay '
+                    'the same.',
                 value: _simplify,
                 onChanged: (v) => setState(() => _simplify = v),
               ),
@@ -450,6 +453,15 @@ class SplitGroupScreen extends StatelessWidget {
     final transfers = groupTransfers(group, book);
     final expenses = book.expenses.where((e) => e.groupId == groupId).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
+    // Every IOU, for comparing with the simplified payments.
+    final iou = group.simplifyDebts
+        ? pairwiseDebts(
+            expenses,
+            book.settlements.where((s) => s.groupId == groupId),
+            groupId: groupId,
+          )
+        : transfers;
+    final simplified = group.simplifyDebts && !_samePayments(iou, transfers);
 
     Future<void> recordBetweenOthers(Transfer t) async {
       final ok = await confirmSheet(
@@ -514,6 +526,33 @@ class SplitGroupScreen extends StatelessWidget {
                 group.simplifyDebts ? 'To settle up' : 'Who owes whom',
                 style: SteadyType.body.copyWith(fontWeight: FontWeight.w700),
               ),
+              if (simplified)
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Simplified: ${transfers.length} '
+                        '${transfers.length == 1 ? 'payment' : 'payments'} '
+                        'instead of ${iou.length}. Everyone ends up even.',
+                        style: SteadyType.caption.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: c.muted,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: SteadySpace.s2),
+                    LinkText(
+                      'How?',
+                      onTap: () => _explainSimplified(
+                        context,
+                        store,
+                        book,
+                        iou: iou,
+                        simplified: transfers,
+                      ),
+                    ),
+                  ],
+                ),
               if (transfers.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: SteadySpace.s2),
@@ -580,6 +619,80 @@ class SplitGroupScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Same payments, in any order.
+bool _samePayments(List<Transfer> a, List<Transfer> b) {
+  String key(Transfer t) => '${t.fromId}>${t.toId}:${t.amountCents}';
+  final ka = a.map(key).toList()..sort();
+  final kb = b.map(key).toList()..sort();
+  return ka.join(',') == kb.join(',');
+}
+
+/// "Simplify debts", shown with this group's own numbers: every IOU next
+/// to the fewer payments that settle the same totals.
+void _explainSimplified(
+  BuildContext context,
+  BudgetStore store,
+  SplitBook book, {
+  required List<Transfer> iou,
+  required List<Transfer> simplified,
+}) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) {
+      final c = context.colors;
+      Widget list(String title, List<Transfer> ts) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: SteadySpace.s4),
+          Overline(title),
+          for (final t in ts)
+            ValueRow(
+              label: _transferLabel(book, t),
+              value: _m(store, t.amountCents),
+              muted: false,
+            ),
+        ],
+      );
+      return SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            SteadySpace.screenMargin,
+            0,
+            SteadySpace.screenMargin,
+            SteadySpace.s6,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Fewer payments, same result', style: SteadyType.title),
+              const SizedBox(height: SteadySpace.s2),
+              Text(
+                'Steady adds up what each person paid and what their share '
+                'was, then finds the fewest payments that square everyone. '
+                'Someone may pay a person they never split with directly. '
+                "That's fine: everyone gives or gets exactly the same total.",
+                style: SteadyType.body.copyWith(color: c.muted),
+              ),
+              list('Every IOU (${iou.length})', iou),
+              list('Simplified (${simplified.length})', simplified),
+              const SizedBox(height: SteadySpace.s3),
+              Text(
+                'Prefer to see every IOU? Turn off "Simplify debts" in Edit.',
+                style: SteadyType.caption.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: c.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 // ─── Add a shared expense ──────────────────────────────────────────────────

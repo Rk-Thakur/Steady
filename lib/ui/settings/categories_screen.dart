@@ -59,6 +59,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           onSelected: (b) => setState(() => _bills = b),
         ),
         if (!_bills)
+          Text(
+            'Your daily number is the limit that counts. A monthly limit on '
+            'a category is an optional warning inside it, so you can see '
+            'where the money goes. It never takes money out of your number.',
+            style: SteadyType.caption.copyWith(
+              fontWeight: FontWeight.w500,
+              color: c.muted,
+            ),
+          ),
+        if (!_bills)
           GroupedList(
             padding: const EdgeInsets.only(left: 14, right: SteadySpace.s2),
             children: [

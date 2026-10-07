@@ -14,12 +14,16 @@ class HeroCard extends StatelessWidget {
     required this.number,
     required this.payday,
     required this.symbol,
+    this.change,
     this.onTap,
   });
 
   final DailyNumber number;
   final LocalDate payday;
   final String symbol;
+
+  /// Since yesterday; shown as "Up $4.25 from yesterday: you spent less".
+  final String? change;
   final VoidCallback? onTap;
 
   @override
@@ -42,7 +46,9 @@ class HeroCard extends StatelessWidget {
       label:
           'Safe to spend today, ${money(number.safeToSpendCents)}. '
           '${over ? 'Over by ${money(number.overspentByCents)}.' : 'On track.'} '
+          '${change != null && !over ? '$change. ' : ''}'
           '$spentLine. Payday ${formatShortDate(payday)}.',
+      hint: onTap != null ? 'Shows how the number is worked out' : null,
       excludeSemantics: true,
       child: Material(
         color: over ? c.surface : c.hero,
@@ -63,13 +69,28 @@ class HeroCard extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        'Safe to spend today',
-                        style: SteadyType.body.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: fg,
-                        ),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'Safe to spend today',
+                              style: SteadyType.body.copyWith(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: fg,
+                              ),
+                            ),
+                          ),
+                          // Tapping the card explains the number; this says so.
+                          if (onTap != null) ...[
+                            const SizedBox(width: SteadySpace.s1),
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 16,
+                              color: fgMuted,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     over
@@ -104,6 +125,16 @@ class HeroCard extends StatelessWidget {
                       color: fgMuted,
                     ),
                   ),
+                  if (change case final change?) ...[
+                    const SizedBox(height: SteadySpace.s1),
+                    Text(
+                      change,
+                      style: SteadyType.caption.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: fg,
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: SteadySpace.s3),
                 _ProgressBar(

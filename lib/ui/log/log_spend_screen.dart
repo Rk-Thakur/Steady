@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../core/date_format.dart';
 import '../../core/money.dart';
+import '../../data/budget_store.dart';
 import '../../data/store_scope.dart';
+import '../../domain/bill_match.dart';
+import '../../domain/category_cover.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
@@ -58,12 +62,130 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
     );
   }
 
-  void _save() {
+  Future<void> _save() async {
     final store = StoreScope.of(context);
     final entry = _draft(store.newId('entry'));
     if (entry == null) return;
+    // A reserved bill logged as a spend would count twice.
+    final bill = likelyBillFor(
+      merchant: entry.merchant,
+      amountCents: entry.amountCents,
+      reservedBills: store.upcomingBills,
+      today: store.today,
+    );
+    if (bill != null) {
+      final choice = await _askAboutBill(store, bill, entry.amountCents);
+      if (!mounted || choice == null) return;
+      if (choice) {
+        store.payBill(bill, amountCents: entry.amountCents);
+        if (mounted) Navigator.of(context).pop();
+        return;
+      }
+    }
     store.addEntry(entry);
-    Navigator.of(context).pop();
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  /// True: mark the bill as paid. False: it's an ordinary spend. Null:
+  /// dismissed (nothing saved).
+  Future<bool?> _askAboutBill(BudgetStore store, Bill bill, int cents) {
+    final symbol = store.symbol;
+    String m(int c) => formatMoney(c, symbol: symbol);
+    return showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            SteadySpace.s5,
+            SteadySpace.s5,
+            SteadySpace.s5,
+            SteadySpace.s4,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Is this your ${bill.name} bill?',
+                style: SteadyType.title.copyWith(fontSize: 22),
+              ),
+              const SizedBox(height: SteadySpace.s2),
+              Text(
+                '${bill.name} (${bill.isEstimate ? '~' : ''}${m(bill.amountCents)}, '
+                'due ${formatShortDate(bill.dueDate)}) is already set aside. '
+                'Mark it as paid so it isn\'t counted twice.',
+                style: SteadyType.body.copyWith(
+                  color: context.colors.muted,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: SteadySpace.s5),
+              SteadyButton(
+                'Mark ${bill.name} as paid',
+                onPressed: () => Navigator.of(context).pop(true),
+              ),
+              const SizedBox(height: 10),
+              SteadyButton(
+                'No, it\'s a normal spend',
+                kind: ButtonKind.secondary,
+                onPressed: () => Navigator.of(context).pop(false),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The category's monthly limit, as a warning inside the daily number:
+  /// what's left, "getting close" from 80%, or how far over this spend goes.
+  Widget? _limitLine(BudgetStore store, Entry? draft) {
+    final category = store.categoryById(_categoryId);
+    final limit = category?.monthlyLimitCents;
+    if (category == null || limit == null) return null;
+    final c = context.colors;
+    String whole(int cents) =>
+        formatMoney(cents, symbol: store.symbol, showCents: false);
+    final left = store.leftThisMonth(
+      category,
+      on: widget.args.date ?? store.today,
+    )!;
+    final after = left - (draft?.amountCents ?? 0);
+    final level = limitLevel(limitCents: limit, leftAfterCents: after);
+    final name = category.name;
+    final text = switch (level) {
+      LimitLevel.over =>
+        'This takes $name ${whole(-after)} over its ${whole(limit)} monthly '
+            'limit. Just a warning: your daily number counts it as usual.',
+      LimitLevel.close =>
+        '$name: ${whole(after)} left of ${whole(limit)} this month'
+            '${draft == null ? '' : ' after this'}. Getting close.',
+      LimitLevel.fine =>
+        '$name: ${whole(after)} left of ${whole(limit)} this month'
+            '${draft == null ? '' : ' after this'}.',
+    };
+    final warn = level != LimitLevel.fine;
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (warn) ...[
+            Icon(Icons.warning_amber_rounded, size: 16, color: c.warningFg),
+            const SizedBox(width: SteadySpace.s1),
+          ],
+          Expanded(
+            child: Text(
+              text,
+              style: SteadyType.caption.copyWith(
+                fontWeight: warn ? FontWeight.w700 : FontWeight.w500,
+                color: warn ? c.warningFg : c.muted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -127,6 +249,11 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
           onChanged: (_) => setState(() {}),
         ),
         SteadyField(label: 'Where', controller: _where, hint: 'Shop or place'),
+        Text(
+          'Paying a bill? Mark it as paid in Bills instead, so it isn\'t '
+          'counted twice.',
+          style: SteadyType.caption.copyWith(color: context.colors.muted),
+        ),
         ChipGroup<String>(
           label: 'Category',
           options: [for (final c in categories) c.id],
@@ -134,6 +261,7 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
           labelOf: (id) => store.categoryById(id)?.name ?? id,
           onSelected: (id) => setState(() => _categoryId = id),
         ),
+        ?_limitLine(store, draft),
         ChipGroup<Mood>(
           label: 'How are you feeling?',
           options: Mood.values,

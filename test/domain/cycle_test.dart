@@ -284,4 +284,112 @@ void main() {
       expect(p.needsReview, isFalse);
     });
   });
+
+  group('per-goal set-aside this cycle', () {
+    const fund = Goal(
+      id: 'fund',
+      name: 'Fund',
+      targetCents: 300000,
+      savedCents: 0,
+      dailySetAsideCents: 1000,
+    );
+
+    test('a new goal holds back its daily amount for the days left', () {
+      expect(
+        cycleSetAsideAfterChange(before: null, after: fund, daysLeft: 10),
+        10000,
+      );
+      // Never more than it still needs.
+      expect(
+        cycleSetAsideAfterChange(
+          before: null,
+          after: fund.copyWith(savedCents: 296000),
+          daysLeft: 10,
+        ),
+        4000,
+      );
+    });
+
+    test('pausing releases the days ahead, keeps the days gone', () {
+      // Started a 13-day cycle holding $130; paused with 10 days left.
+      final held = fund.copyWith(cycleSetAsideCents: 13000);
+      final paused = held.copyWith(paused: true);
+      expect(
+        cycleSetAsideAfterChange(before: held, after: paused, daysLeft: 10),
+        3000,
+      );
+      // Resuming with 6 days left adds those days back.
+      final p = paused.copyWith(cycleSetAsideCents: 3000);
+      expect(
+        cycleSetAsideAfterChange(
+          before: p,
+          after: p.copyWith(paused: false),
+          daysLeft: 6,
+        ),
+        9000,
+      );
+    });
+
+    test('topping up to the target releases the rest', () {
+      final held = fund.copyWith(savedCents: 290000, cycleSetAsideCents: 10000);
+      expect(
+        cycleSetAsideAfterChange(
+          before: held,
+          after: held.copyWith(savedCents: 300000),
+          daysLeft: 5,
+        ),
+        0,
+      );
+    });
+
+    test('older goals share the cycle total by their daily amounts', () {
+      final goals = withCycleSetAsides(
+        [
+          fund,
+          fund.copyWith(dailySetAsideCents: 500).withId('b'),
+          fund.copyWith(paused: true).withId('c'),
+        ],
+        14999,
+        10,
+      );
+      expect(goals.map((g) => g.cycleSetAsideCents), [10000, 4999, 0]);
+    });
+
+    test('payday moves each goal its own amount, not a share of the total', () {
+      // Fund held $130 all cycle; Laptop started late and holds $20.
+      final next = startNewCycle(
+        start: oct15,
+        current: const CyclePlan(
+          startDate: oct2,
+          openingBalanceCents: 139200,
+          goalSetAsideCents: 15000,
+        ),
+        entries: const [],
+        goals: [
+          fund.copyWith(cycleSetAsideCents: 13000),
+          fund
+              .copyWith(dailySetAsideCents: 1000, cycleSetAsideCents: 2000)
+              .withId('laptop'),
+        ],
+        frequency: PayFrequency.monthly,
+      );
+      expect(next.goals.map((g) => g.savedCents), [13000, 2000]);
+      // Both hold the full new 31-day cycle.
+      expect(next.goals.map((g) => g.cycleSetAsideCents), [31000, 31000]);
+      expect(next.plan.goalSetAsideCents, 62000);
+    });
+  });
+}
+
+extension on Goal {
+  Goal withId(String id) => Goal(
+    id: id,
+    name: name,
+    kind: kind,
+    targetCents: targetCents,
+    savedCents: savedCents,
+    dailySetAsideCents: dailySetAsideCents,
+    paused: paused,
+    cycleSetAsideCents: cycleSetAsideCents,
+  );
 }

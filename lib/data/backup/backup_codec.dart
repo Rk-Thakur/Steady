@@ -129,6 +129,7 @@ abstract final class BackupCodec {
     'overspendStrategy': s.overspendStrategy.name,
     'onboarded': s.onboarded,
     'lastBackupOn': s.lastBackupOn?.toIso(),
+    'caughtUpThrough': s.caughtUpThrough?.toIso(),
     'reminders': {
       'logSpends': s.reminders.logSpends,
       'logAtMinutes': s.reminders.logAtMinutes,
@@ -159,6 +160,7 @@ abstract final class BackupCodec {
     ),
     onboarded: s['onboarded']! as bool,
     lastBackupOn: _dateOrNull(s['lastBackupOn']),
+    caughtUpThrough: _dateOrNull(s['caughtUpThrough']),
     reminders: _remindersFrom(s['reminders'] as Map<String, Object?>?),
   );
 
@@ -266,6 +268,7 @@ abstract final class BackupCodec {
     'targetDate': g.targetDate?.toIso(),
     'paused': g.paused,
     'createdOn': g.createdOn?.toIso(),
+    'cycleSetAsideCents': g.cycleSetAsideCents,
   };
 
   static Goal _goalFrom(Map<String, Object?> g) => Goal(
@@ -278,6 +281,8 @@ abstract final class BackupCodec {
     targetDate: _dateOrNull(g['targetDate']),
     paused: g['paused']! as bool,
     createdOn: _dateOrNull(g['createdOn']),
+    // Older backups: the store gives the goal its share of the cycle.
+    cycleSetAsideCents: g['cycleSetAsideCents'] as int?,
   );
 
   static Map<String, Object?> _splitsJson(SplitBook b) => {

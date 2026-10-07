@@ -103,3 +103,23 @@ int categoryCoverCents({
   }
   return cover;
 }
+
+/// Where a category stands against its monthly limit after a spend.
+enum LimitLevel {
+  /// Under 80% used.
+  fine,
+
+  /// 80% used or more: "getting close".
+  close,
+
+  /// Past the limit.
+  over,
+}
+
+/// [leftAfterCents]: what's left of [limitCents] this month once the spend
+/// counts (negative when over).
+LimitLevel limitLevel({required int limitCents, required int leftAfterCents}) {
+  if (leftAfterCents < 0) return LimitLevel.over;
+  final used = limitCents - leftAfterCents;
+  return used * 5 >= limitCents * 4 ? LimitLevel.close : LimitLevel.fine;
+}

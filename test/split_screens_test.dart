@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:steady/core/local_date.dart';
+import 'package:steady/core/money.dart';
 import 'package:steady/data/budget_store.dart';
 import 'package:steady/domain/models/models.dart';
 import 'package:steady/main.dart';
@@ -81,7 +82,10 @@ void main() {
     );
     await tapText(tester, 'Save');
 
-    expect(store.splits.expenses.where((e) => e.name == 'Dinner'), hasLength(1));
+    expect(
+      store.splits.expenses.where((e) => e.name == 'Dinner'),
+      hasLength(1),
+    );
     expect(find.textContaining('Dinner', findRichText: true), findsWidgets);
     expect(find.text('Sam pays you'), findsOneWidget);
     expect(find.text('Rahul pays you'), findsOneWidget);
@@ -156,5 +160,80 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('You owe Priya'), findsOneWidget);
     expect(find.textContaining('nudge'), findsNothing);
+  });
+
+  testWidgets('Today: money owed back, and how it counts', (tester) async {
+    final store = await open(tester, Routes.home);
+    final owed = store.splitBalances.fold(0, (s, b) => s + b.owesYou);
+    final owe = store.splitBalances.fold(0, (s, b) => s + b.youOwe);
+    expect(owed, greaterThan(0));
+    String m(int c) => formatMoney(c, symbol: r'$');
+    final strip = find.textContaining(
+      '${m(owed)} owed back to you',
+      findRichText: true,
+    );
+    expect(strip, findsOneWidget);
+    expect(
+      find.textContaining(
+        owe > 0
+            ? 'Each counts in your number once it changes hands.'
+            : "it's added when they pay you back",
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(strip);
+    await tester.pumpAndSettle();
+    expect(find.text('Owed to you'), findsOneWidget); // Split expenses
+  });
+
+  testWidgets('a simplified group says so, and shows both ways', (
+    tester,
+  ) async {
+    final store = BudgetStore.sample(clock: () => oct2);
+    store.saveSplitGroup(
+      const SplitGroup(
+        id: 'chain',
+        name: 'Chain',
+        memberIds: ['person-sam', 'person-priya'],
+      ),
+    );
+    // You paid $60 with Sam; Priya paid $60 with you.
+    store.addGroupExpense(
+      groupId: 'chain',
+      name: 'Tickets',
+      amountCents: 6000,
+      date: oct2,
+      paidBy: youId,
+      shares: const {youId: 3000, 'person-sam': 3000},
+    );
+    store.addGroupExpense(
+      groupId: 'chain',
+      name: 'Taxi',
+      amountCents: 6000,
+      date: oct2,
+      paidBy: 'person-priya',
+      shares: const {youId: 3000, 'person-priya': 3000},
+    );
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(SteadyApp(store: store, initialRoute: Routes.home));
+    await tester.pumpAndSettle();
+    tester
+        .state<NavigatorState>(find.byType(Navigator).first)
+        .pushNamed(Routes.splitGroup, arguments: 'chain');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sam pays Priya'), findsOneWidget);
+    expect(
+      find.text('Simplified: 1 payment instead of 2. Everyone ends up even.'),
+      findsOneWidget,
+    );
+    await tapText(tester, 'How?');
+    expect(find.text('EVERY IOU (2)'), findsOneWidget);
+    expect(find.text('Sam pays you'), findsOneWidget);
+    expect(find.text('You pay Priya'), findsOneWidget);
+    expect(find.text('SIMPLIFIED (1)'), findsOneWidget);
   });
 }

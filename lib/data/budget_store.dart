@@ -3,13 +3,16 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../core/local_date.dart';
+import '../domain/after_payday.dart';
 import '../domain/category_cover.dart';
 import '../domain/reminders.dart';
 import '../domain/cycle.dart';
 import '../domain/daily_number.dart';
 import '../domain/models/models.dart';
+import '../domain/number_change.dart';
 import '../domain/schedule.dart';
 import '../domain/split_math.dart';
+import '../domain/vault_stats.dart';
 import 'db/budget_repository.dart';
 import 'db/database_key.dart';
 
@@ -42,7 +45,9 @@ class BudgetStore extends ChangeNotifier {
        _overspendHandled = Map.of(overspendDecisions),
        _dailyNumbers = Map.of(dailyNumbers),
        _clock = clock ?? LocalDate.today,
-       _repo = repository;
+       _repo = repository {
+    _fillCycleSetAsides();
+  }
 
   /// Builds the store from what the database holds. A fresh install gets
   /// [defaultSnapshot] (and it is saved straight away).
@@ -78,7 +83,11 @@ class BudgetStore extends ChangeNotifier {
       repository: repository,
       pinVault: pinVault,
     );
-    if (snapshot.isFresh) store._save((r) => r.replaceAll(store.toSnapshot()));
+    if (snapshot.isFresh) {
+      store._save((r) => r.replaceAll(store.toSnapshot()));
+    } else if (s.goals.any((g) => g.cycleSetAsideCents == null)) {
+      store._saveGoals();
+    }
     // Catch up on Vault releases and automatic cycles since the last launch.
     store.refreshDay();
     store._recordDailyNumber();
@@ -228,6 +237,28 @@ class BudgetStore extends ChangeNotifier {
     coveredCents: _coverOn(today, _entries),
   );
 
+  /// How today's number moved since yesterday, and why ("Up $4.25: you
+  /// spent less yesterday"). Null on a cycle's first day or with no number
+  /// recorded for yesterday.
+  NumberChange? get numberChange {
+    final yesterday = today.addDays(-1);
+    var spent = 0;
+    for (final e in _entries) {
+      if (e.localDate == yesterday && e.isSpend && !e.isBillPayment) {
+        spent += e.amountCents;
+      }
+    }
+    // An overspend a category took over ("Take it from Fun money") doesn't
+    // weigh on the days ahead, so it doesn't count against yesterday here.
+    spent -= _coverOn(today, _entries) - _coverOn(yesterday, _entries);
+    return numberChangeSinceYesterday(
+      today: dailyNumber,
+      yesterdayCents: _dailyNumbers[yesterday],
+      yesterdaySpentCents: spent,
+      cycleStart: _plan.startDate,
+    );
+  }
+
   /// The daily number if [entry] were logged now (live previews on forms).
   /// A spend in a category that is covering an overspend can shrink that
   /// cover, and the preview shows it.
@@ -263,9 +294,15 @@ class BudgetStore extends ChangeNotifier {
     categories: _categories,
   );
 
-  /// What's left of [category]'s budget this month (null without a limit).
-  int? leftThisMonth(BudgetCategory category) =>
-      leftInCategoryThisMonth(category, today, _entries, _overspendHandled);
+  /// What's left of [category]'s budget this month (null without a limit),
+  /// or in [on]'s month (logging a spend for an earlier day).
+  int? leftThisMonth(BudgetCategory category, {LocalDate? on}) =>
+      leftInCategoryThisMonth(
+        category,
+        on ?? today,
+        _entries,
+        _overspendHandled,
+      );
 
   /// The category that can cover today's overspend of [overCents]: Fun if it
   /// has room (design), otherwise the one with the most left this month.
@@ -298,7 +335,7 @@ class BudgetStore extends ChangeNotifier {
         ),
         settings: _settings,
         bills: _bills,
-        loggedToday: _entries.any((e) => e.localDate == today),
+        loggedToday: _entries.any((e) => e.localDate == today && !e.fromVault),
         debts: [
           for (final b in splitBalances)
             for (final owedToYou in [true, false])
@@ -335,21 +372,48 @@ class BudgetStore extends ChangeNotifier {
     });
 
   /// Most recent day with any entry, or null if nothing was ever logged.
+  /// The latest day with an entry you logged. The Vault's Monday releases
+  /// are automatic, so they don't count.
   LocalDate? get lastLoggedDate {
     LocalDate? last;
     for (final e in _entries) {
+      if (e.fromVault) continue;
       if (last == null || e.localDate.isAfter(last)) last = e.localDate;
     }
     return last;
   }
 
   /// Days before today with nothing logged since the last entry (S3 catch-up).
+  /// Days marked "No spends" in catch-up count as accounted for.
   List<LocalDate> get missedDays {
-    final last = lastLoggedDate;
+    var last = lastLoggedDate;
     if (last == null) return const [];
+    final through = _settings.caughtUpThrough;
+    if (through != null && through.isAfter(last)) last = through;
     final t = today;
     return [for (var d = last.addDays(1); d.isBefore(t); d = d.addDays(1)) d];
   }
+
+  /// Catch-up takes over Today for 2+ missed days, unless put off today.
+  bool get showCatchUp => missedDays.length >= 2 && _catchUpSnoozedOn != today;
+  LocalDate? _catchUpSnoozedOn;
+
+  /// "Not now": use Today as usual (the number stays an estimate).
+  void snoozeCatchUp() {
+    _catchUpSnoozedOn = today;
+    notifyListeners();
+  }
+
+  /// Back to catch-up from the estimate banner.
+  void resumeCatchUp() {
+    _catchUpSnoozedOn = null;
+    notifyListeners();
+  }
+
+  /// Every missed day is logged or confirmed "No spends".
+  void markCaughtUp() => updateSettings(
+    _settings.copyWith(caughtUpThrough: () => today.addDays(-1)),
+  );
 
   bool get isNewUser => _entries.isEmpty && _bills.isEmpty;
 
@@ -374,6 +438,11 @@ class BudgetStore extends ChangeNotifier {
   List<Bill> get upcomingBills =>
       _bills.where((b) => b.isReservedBefore(nextPayday)).toList()
         ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+  /// Monthly and yearly bills due on payday or the week after: not set
+  /// aside this cycle, paid from the next pay.
+  List<Bill> get billsRightAfterNextPayday =>
+      billsRightAfterPayday(_bills, nextPayday);
 
   int get reservedBillsCents =>
       _bills.fold(0, (sum, b) => sum + b.reservedBefore(nextPayday));
@@ -405,9 +474,36 @@ class BudgetStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// What happened at the last cycle change, on the day it happened.
+  CycleSummary? get cycleSummary =>
+      newCycleStartedOn != null ? _cycleSummary : null;
+  CycleSummary? _cycleSummary;
+
+  /// Today opens the summary once by itself; after that it's a tap away.
+  bool get cycleSummaryUnseen => cycleSummary != null && !_cycleSummarySeen;
+  bool _cycleSummarySeen = false;
+
+  void markCycleSummarySeen() => _cycleSummarySeen = true;
+
   int get billsNeedingReview => _bills.where((b) => b.needsReview).length;
 
   int get vaultBalanceCents => _vault.balanceCents(_entries);
+
+  /// Income in each of the last 8 weeks, oldest first (the Vault chart).
+  List<int> get weeklyIncomeCents => weeklyIncome(_entries, today);
+
+  /// The next Monday release: steady pay, or what's left if the Vault is
+  /// running low. Null when the Vault isn't set up.
+  ({LocalDate date, int cents})? get nextVaultRelease {
+    if (!_vault.isActive) return null;
+    return (
+      date: mondayAfter(_vault.lastReleaseDate ?? today),
+      cents: math.min(
+        _vault.steadyPayWeeklyCents,
+        math.max(0, vaultBalanceCents),
+      ),
+    );
+  }
 
   int get goalsDailyCents => _goals
       .where((g) => !g.paused && !g.isReached)
@@ -578,6 +674,8 @@ class BudgetStore extends ChangeNotifier {
       ..clear()
       ..addAll(next.goals);
     _newCycleOn = start;
+    _cycleSummary = next.summary;
+    _cycleSummarySeen = false;
     final plan = _plan;
     final settings = _settings;
     final goals = List.of(_goals);
@@ -648,20 +746,78 @@ class BudgetStore extends ChangeNotifier {
     _save((r) => r.deleteCategory(id));
   }
 
+  /// A new goal holds back its daily set-aside from today to payday, so
+  /// today's number drops by about that much straight away.
   void addGoal(Goal goal) {
+    goal = goal.copyWith(
+      cycleSetAsideCents: cycleSetAsideAfterChange(
+        before: null,
+        after: goal,
+        daysLeft: dailyNumber.daysLeft,
+      ),
+    );
     _goals.add(goal);
+    _syncGoalPlan();
     notifyListeners();
     final order = _orderOf(_goals, goal);
     _save((r) => r.upsertGoal(goal, sortOrder: order));
   }
 
+  /// Pausing, resuming, re-pacing or adding money changes what the goal
+  /// holds back for the rest of the cycle, and so today's number.
   void updateGoal(Goal goal) {
     final i = _goals.indexWhere((g) => g.id == goal.id);
     if (i < 0) return;
+    goal = goal.copyWith(
+      cycleSetAsideCents: cycleSetAsideAfterChange(
+        before: _goals[i],
+        after: goal,
+        daysLeft: dailyNumber.daysLeft,
+      ),
+    );
     _goals[i] = goal;
+    _syncGoalPlan();
     notifyListeners();
     _save((r) => r.upsertGoal(goal, sortOrder: i));
   }
+
+  /// The cycle's goal total is the sum of what each goal holds back.
+  void _syncGoalPlan() {
+    final total = _goals.fold(0, (sum, g) => sum + (g.cycleSetAsideCents ?? 0));
+    if (total == _plan.goalSetAsideCents) return;
+    final plan = _plan = CyclePlan(
+      startDate: _plan.startDate,
+      openingBalanceCents: _plan.openingBalanceCents,
+      goalSetAsideCents: total,
+    );
+    _save((r) => r.savePlan(plan));
+  }
+
+  /// Goals from before per-goal set-asides were tracked get their share of
+  /// the cycle's total.
+  void _fillCycleSetAsides() {
+    if (_goals.every((g) => g.cycleSetAsideCents != null)) return;
+    final filled = withCycleSetAsides(
+      _goals,
+      _plan.goalSetAsideCents,
+      math.max(1, _plan.startDate.daysUntil(_settings.nextPayday)),
+    );
+    _goals
+      ..clear()
+      ..addAll(filled);
+  }
+
+  void _saveGoals() {
+    final goals = List.of(_goals);
+    _save((r) async {
+      for (var i = 0; i < goals.length; i++) {
+        await r.upsertGoal(goals[i], sortOrder: i);
+      }
+    });
+  }
+
+  /// What [goal] holds back this cycle (moves into it on payday).
+  int cycleSetAsideFor(Goal goal) => goal.cycleSetAsideCents ?? 0;
 
   void updateVault(Vault vault) {
     if (vault.isActive && vault.lastReleaseDate == null) {
@@ -916,10 +1072,14 @@ class BudgetStore extends ChangeNotifier {
     final todaysDelta = _entries
         .where((e) => e.localDate == today)
         .fold<int>(0, (s, e) => s + e.spendableDeltaCents);
-    final setAside = goalSetAsides(
-      _goals,
-      today.daysUntil(payday),
-    ).values.fold(0, (a, b) => a + b);
+    final shares = goalSetAsides(_goals, today.daysUntil(payday));
+    final setAside = shares.values.fold(0, (a, b) => a + b);
+    for (var i = 0; i < _goals.length; i++) {
+      _goals[i] = _goals[i].copyWith(
+        cycleSetAsideCents: shares[_goals[i].id] ?? 0,
+      );
+    }
+    _saveGoals();
     final plan = CyclePlan(
       startDate: today,
       // Money "now" already includes today's entries, so add them back.
@@ -983,6 +1143,7 @@ class BudgetStore extends ChangeNotifier {
     _goals
       ..clear()
       ..addAll(s.goals);
+    _fillCycleSetAsides();
     _vault = s.vault!;
     _splits = s.splits;
     _overspendHandled

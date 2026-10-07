@@ -158,7 +158,11 @@ class _BillEditScreenState extends State<BillEditScreen> {
           ),
           child: SwitchRow(
             title: 'Amount changes',
-            subtitle: 'Mark as an estimate (like electric)',
+            subtitle: _estimate
+                ? "Steady sets aside this much. When you pay, enter the "
+                      "real amount and it's used for next time. Shown with ~."
+                : 'Different every time, like electric or water? Turn on '
+                      'and Steady treats the amount as a best guess.',
             value: _estimate,
             onChanged: (v) => setState(() => _estimate = v),
           ),

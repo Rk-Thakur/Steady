@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
 import '../../core/money.dart';
+import '../../data/budget_store.dart';
 import '../../data/store_scope.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
@@ -278,8 +279,21 @@ class TodayCatchUpBody extends StatefulWidget {
 }
 
 class _TodayCatchUpBodyState extends State<TodayCatchUpBody> {
-  /// Days confirmed as "no spends" this session.
+  /// Days confirmed as "no spends" on this screen, until all are done.
   final _nothing = <LocalDate>{};
+
+  /// "Nothing" for [day]. Once every missed day is answered, catch-up is
+  /// saved as done and Today goes back to normal.
+  void _noSpends(BudgetStore store, LocalDate day, List<LocalDate> missed) {
+    setState(() => _nothing.add(day));
+    if (widget.demoMissed != null || !missed.every(_nothing.contains)) return;
+    store.markCaughtUp();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(
+        content: Text('All caught up. Your number is exact again.'),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -364,7 +378,9 @@ class _TodayCatchUpBodyState extends State<TodayCatchUpBody> {
               Text(
                 open.isEmpty
                     ? 'All caught up. Your number is firm again.'
-                    : 'Assumes you spent nothing on $weekdays. It firms up once you catch up.',
+                    : 'A best guess: it assumes you spent nothing on '
+                          '$weekdays. If you did spend, your real number is '
+                          'lower. Catch up to make it exact.',
                 style: SteadyType.caption.copyWith(
                   fontWeight: FontWeight.w500,
                   color: c.muted,
@@ -427,7 +443,7 @@ class _TodayCatchUpBodyState extends State<TodayCatchUpBody> {
                         kind: ButtonKind.secondary,
                         height: 40,
                         expand: false,
-                        onPressed: () => setState(() => _nothing.add(d)),
+                        onPressed: () => _noSpends(store, d, missed),
                       ),
                     ],
                   ],
@@ -435,6 +451,10 @@ class _TodayCatchUpBodyState extends State<TodayCatchUpBody> {
               ),
           ],
         ),
+        if (open.isNotEmpty && widget.demoMissed == null)
+          Center(
+            child: LinkText('Not now, show my day', onTap: store.snoozeCatchUp),
+          ),
       ],
     );
   }

@@ -149,6 +149,15 @@ class $SettingsRowsTable extends SettingsRows
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       ).withConverter<LocalDate?>($SettingsRowsTable.$converterlastBackupOnn);
+  @override
+  late final GeneratedColumnWithTypeConverter<LocalDate?, String>
+  caughtUpThrough = GeneratedColumn<String>(
+    'caught_up_through',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  ).withConverter<LocalDate?>($SettingsRowsTable.$convertercaughtUpThroughn);
   static const VerificationMeta _remindLogSpendsMeta = const VerificationMeta(
     'remindLogSpends',
   );
@@ -335,6 +344,7 @@ class $SettingsRowsTable extends SettingsRows
     overspendStrategy,
     onboarded,
     lastBackupOn,
+    caughtUpThrough,
     remindLogSpends,
     remindLogAt,
     remindBills,
@@ -585,6 +595,12 @@ class $SettingsRowsTable extends SettingsRows
           data['${effectivePrefix}last_backup_on'],
         ),
       ),
+      caughtUpThrough: $SettingsRowsTable.$convertercaughtUpThroughn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}caught_up_through'],
+        ),
+      ),
       remindLogSpends: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}remind_log_spends'],
@@ -661,6 +677,10 @@ class $SettingsRowsTable extends SettingsRows
       const LocalDateConverter();
   static TypeConverter<LocalDate?, String?> $converterlastBackupOnn =
       NullAwareTypeConverter.wrap($converterlastBackupOn);
+  static TypeConverter<LocalDate, String> $convertercaughtUpThrough =
+      const LocalDateConverter();
+  static TypeConverter<LocalDate?, String?> $convertercaughtUpThroughn =
+      NullAwareTypeConverter.wrap($convertercaughtUpThrough);
 }
 
 class SettingsRow extends DataClass implements Insertable<SettingsRow> {
@@ -679,6 +699,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
 
   /// v3: when the user last created a .steady backup file.
   final LocalDate? lastBackupOn;
+
+  /// v11: catch-up done through this day ("No spends" days included).
+  final LocalDate? caughtUpThrough;
 
   /// v5: Reminders (see ReminderSettings for meanings and defaults).
   final bool remindLogSpends;
@@ -713,6 +736,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     required this.overspendStrategy,
     required this.onboarded,
     this.lastBackupOn,
+    this.caughtUpThrough,
     required this.remindLogSpends,
     required this.remindLogAt,
     required this.remindBills,
@@ -774,6 +798,11 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
         $SettingsRowsTable.$converterlastBackupOnn.toSql(lastBackupOn),
       );
     }
+    if (!nullToAbsent || caughtUpThrough != null) {
+      map['caught_up_through'] = Variable<String>(
+        $SettingsRowsTable.$convertercaughtUpThroughn.toSql(caughtUpThrough),
+      );
+    }
     map['remind_log_spends'] = Variable<bool>(remindLogSpends);
     map['remind_log_at'] = Variable<int>(remindLogAt);
     map['remind_bills'] = Variable<bool>(remindBills);
@@ -810,6 +839,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       lastBackupOn: lastBackupOn == null && nullToAbsent
           ? const Value.absent()
           : Value(lastBackupOn),
+      caughtUpThrough: caughtUpThrough == null && nullToAbsent
+          ? const Value.absent()
+          : Value(caughtUpThrough),
       remindLogSpends: Value(remindLogSpends),
       remindLogAt: Value(remindLogAt),
       remindBills: Value(remindBills),
@@ -853,6 +885,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           .fromJson(serializer.fromJson<String>(json['overspendStrategy'])),
       onboarded: serializer.fromJson<bool>(json['onboarded']),
       lastBackupOn: serializer.fromJson<LocalDate?>(json['lastBackupOn']),
+      caughtUpThrough: serializer.fromJson<LocalDate?>(json['caughtUpThrough']),
       remindLogSpends: serializer.fromJson<bool>(json['remindLogSpends']),
       remindLogAt: serializer.fromJson<int>(json['remindLogAt']),
       remindBills: serializer.fromJson<bool>(json['remindBills']),
@@ -896,6 +929,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       ),
       'onboarded': serializer.toJson<bool>(onboarded),
       'lastBackupOn': serializer.toJson<LocalDate?>(lastBackupOn),
+      'caughtUpThrough': serializer.toJson<LocalDate?>(caughtUpThrough),
       'remindLogSpends': serializer.toJson<bool>(remindLogSpends),
       'remindLogAt': serializer.toJson<int>(remindLogAt),
       'remindBills': serializer.toJson<bool>(remindBills),
@@ -925,6 +959,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     OverspendStrategy? overspendStrategy,
     bool? onboarded,
     Value<LocalDate?> lastBackupOn = const Value.absent(),
+    Value<LocalDate?> caughtUpThrough = const Value.absent(),
     bool? remindLogSpends,
     int? remindLogAt,
     bool? remindBills,
@@ -953,6 +988,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     overspendStrategy: overspendStrategy ?? this.overspendStrategy,
     onboarded: onboarded ?? this.onboarded,
     lastBackupOn: lastBackupOn.present ? lastBackupOn.value : this.lastBackupOn,
+    caughtUpThrough: caughtUpThrough.present
+        ? caughtUpThrough.value
+        : this.caughtUpThrough,
     remindLogSpends: remindLogSpends ?? this.remindLogSpends,
     remindLogAt: remindLogAt ?? this.remindLogAt,
     remindBills: remindBills ?? this.remindBills,
@@ -999,6 +1037,9 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
       lastBackupOn: data.lastBackupOn.present
           ? data.lastBackupOn.value
           : this.lastBackupOn,
+      caughtUpThrough: data.caughtUpThrough.present
+          ? data.caughtUpThrough.value
+          : this.caughtUpThrough,
       remindLogSpends: data.remindLogSpends.present
           ? data.remindLogSpends.value
           : this.remindLogSpends,
@@ -1052,6 +1093,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           ..write('overspendStrategy: $overspendStrategy, ')
           ..write('onboarded: $onboarded, ')
           ..write('lastBackupOn: $lastBackupOn, ')
+          ..write('caughtUpThrough: $caughtUpThrough, ')
           ..write('remindLogSpends: $remindLogSpends, ')
           ..write('remindLogAt: $remindLogAt, ')
           ..write('remindBills: $remindBills, ')
@@ -1083,6 +1125,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
     overspendStrategy,
     onboarded,
     lastBackupOn,
+    caughtUpThrough,
     remindLogSpends,
     remindLogAt,
     remindBills,
@@ -1113,6 +1156,7 @@ class SettingsRow extends DataClass implements Insertable<SettingsRow> {
           other.overspendStrategy == this.overspendStrategy &&
           other.onboarded == this.onboarded &&
           other.lastBackupOn == this.lastBackupOn &&
+          other.caughtUpThrough == this.caughtUpThrough &&
           other.remindLogSpends == this.remindLogSpends &&
           other.remindLogAt == this.remindLogAt &&
           other.remindBills == this.remindBills &&
@@ -1141,6 +1185,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
   final Value<OverspendStrategy> overspendStrategy;
   final Value<bool> onboarded;
   final Value<LocalDate?> lastBackupOn;
+  final Value<LocalDate?> caughtUpThrough;
   final Value<bool> remindLogSpends;
   final Value<int> remindLogAt;
   final Value<bool> remindBills;
@@ -1167,6 +1212,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     this.overspendStrategy = const Value.absent(),
     this.onboarded = const Value.absent(),
     this.lastBackupOn = const Value.absent(),
+    this.caughtUpThrough = const Value.absent(),
     this.remindLogSpends = const Value.absent(),
     this.remindLogAt = const Value.absent(),
     this.remindBills = const Value.absent(),
@@ -1194,6 +1240,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     required OverspendStrategy overspendStrategy,
     this.onboarded = const Value.absent(),
     this.lastBackupOn = const Value.absent(),
+    this.caughtUpThrough = const Value.absent(),
     this.remindLogSpends = const Value.absent(),
     this.remindLogAt = const Value.absent(),
     this.remindBills = const Value.absent(),
@@ -1226,6 +1273,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Expression<String>? overspendStrategy,
     Expression<bool>? onboarded,
     Expression<String>? lastBackupOn,
+    Expression<String>? caughtUpThrough,
     Expression<bool>? remindLogSpends,
     Expression<int>? remindLogAt,
     Expression<bool>? remindBills,
@@ -1253,6 +1301,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       if (overspendStrategy != null) 'overspend_strategy': overspendStrategy,
       if (onboarded != null) 'onboarded': onboarded,
       if (lastBackupOn != null) 'last_backup_on': lastBackupOn,
+      if (caughtUpThrough != null) 'caught_up_through': caughtUpThrough,
       if (remindLogSpends != null) 'remind_log_spends': remindLogSpends,
       if (remindLogAt != null) 'remind_log_at': remindLogAt,
       if (remindBills != null) 'remind_bills': remindBills,
@@ -1282,6 +1331,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
     Value<OverspendStrategy>? overspendStrategy,
     Value<bool>? onboarded,
     Value<LocalDate?>? lastBackupOn,
+    Value<LocalDate?>? caughtUpThrough,
     Value<bool>? remindLogSpends,
     Value<int>? remindLogAt,
     Value<bool>? remindBills,
@@ -1309,6 +1359,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
       overspendStrategy: overspendStrategy ?? this.overspendStrategy,
       onboarded: onboarded ?? this.onboarded,
       lastBackupOn: lastBackupOn ?? this.lastBackupOn,
+      caughtUpThrough: caughtUpThrough ?? this.caughtUpThrough,
       remindLogSpends: remindLogSpends ?? this.remindLogSpends,
       remindLogAt: remindLogAt ?? this.remindLogAt,
       remindBills: remindBills ?? this.remindBills,
@@ -1382,6 +1433,13 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
         $SettingsRowsTable.$converterlastBackupOnn.toSql(lastBackupOn.value),
       );
     }
+    if (caughtUpThrough.present) {
+      map['caught_up_through'] = Variable<String>(
+        $SettingsRowsTable.$convertercaughtUpThroughn.toSql(
+          caughtUpThrough.value,
+        ),
+      );
+    }
     if (remindLogSpends.present) {
       map['remind_log_spends'] = Variable<bool>(remindLogSpends.value);
     }
@@ -1437,6 +1495,7 @@ class SettingsRowsCompanion extends UpdateCompanion<SettingsRow> {
           ..write('overspendStrategy: $overspendStrategy, ')
           ..write('onboarded: $onboarded, ')
           ..write('lastBackupOn: $lastBackupOn, ')
+          ..write('caughtUpThrough: $caughtUpThrough, ')
           ..write('remindLogSpends: $remindLogSpends, ')
           ..write('remindLogAt: $remindLogAt, ')
           ..write('remindBills: $remindBills, ')
@@ -3786,6 +3845,16 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       ).withConverter<LocalDate?>($GoalsTable.$convertercreatedOnn);
+  static const VerificationMeta _cycleSetAsideCentsMeta =
+      const VerificationMeta('cycleSetAsideCents');
+  @override
+  late final GeneratedColumn<int> cycleSetAsideCents = GeneratedColumn<int>(
+    'cycle_set_aside_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3798,6 +3867,7 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
     paused,
     sortOrder,
     createdOn,
+    cycleSetAsideCents,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3866,6 +3936,15 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('cycle_set_aside_cents')) {
+      context.handle(
+        _cycleSetAsideCentsMeta,
+        cycleSetAsideCents.isAcceptableOrUnknown(
+          data['cycle_set_aside_cents']!,
+          _cycleSetAsideCentsMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -3921,6 +4000,10 @@ class $GoalsTable extends Goals with TableInfo<$GoalsTable, GoalRow> {
           data['${effectivePrefix}created_on'],
         ),
       ),
+      cycleSetAsideCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cycle_set_aside_cents'],
+      ),
     );
   }
 
@@ -3952,6 +4035,10 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
   final bool paused;
   final int sortOrder;
   final LocalDate? createdOn;
+
+  /// Held back this pay cycle (v10). Null for goals saved before that; the
+  /// store gives them their share of the cycle's total when it loads.
+  final int? cycleSetAsideCents;
   const GoalRow({
     required this.id,
     required this.name,
@@ -3963,6 +4050,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     required this.paused,
     required this.sortOrder,
     this.createdOn,
+    this.cycleSetAsideCents,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3987,6 +4075,9 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
         $GoalsTable.$convertercreatedOnn.toSql(createdOn),
       );
     }
+    if (!nullToAbsent || cycleSetAsideCents != null) {
+      map['cycle_set_aside_cents'] = Variable<int>(cycleSetAsideCents);
+    }
     return map;
   }
 
@@ -4006,6 +4097,9 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
       createdOn: createdOn == null && nullToAbsent
           ? const Value.absent()
           : Value(createdOn),
+      cycleSetAsideCents: cycleSetAsideCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cycleSetAsideCents),
     );
   }
 
@@ -4027,6 +4121,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
       paused: serializer.fromJson<bool>(json['paused']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       createdOn: serializer.fromJson<LocalDate?>(json['createdOn']),
+      cycleSetAsideCents: serializer.fromJson<int?>(json['cycleSetAsideCents']),
     );
   }
   @override
@@ -4045,6 +4140,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
       'paused': serializer.toJson<bool>(paused),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'createdOn': serializer.toJson<LocalDate?>(createdOn),
+      'cycleSetAsideCents': serializer.toJson<int?>(cycleSetAsideCents),
     };
   }
 
@@ -4059,6 +4155,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     bool? paused,
     int? sortOrder,
     Value<LocalDate?> createdOn = const Value.absent(),
+    Value<int?> cycleSetAsideCents = const Value.absent(),
   }) => GoalRow(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -4070,6 +4167,9 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     paused: paused ?? this.paused,
     sortOrder: sortOrder ?? this.sortOrder,
     createdOn: createdOn.present ? createdOn.value : this.createdOn,
+    cycleSetAsideCents: cycleSetAsideCents.present
+        ? cycleSetAsideCents.value
+        : this.cycleSetAsideCents,
   );
   GoalRow copyWithCompanion(GoalsCompanion data) {
     return GoalRow(
@@ -4091,6 +4191,9 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
       paused: data.paused.present ? data.paused.value : this.paused,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       createdOn: data.createdOn.present ? data.createdOn.value : this.createdOn,
+      cycleSetAsideCents: data.cycleSetAsideCents.present
+          ? data.cycleSetAsideCents.value
+          : this.cycleSetAsideCents,
     );
   }
 
@@ -4106,7 +4209,8 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
           ..write('targetDate: $targetDate, ')
           ..write('paused: $paused, ')
           ..write('sortOrder: $sortOrder, ')
-          ..write('createdOn: $createdOn')
+          ..write('createdOn: $createdOn, ')
+          ..write('cycleSetAsideCents: $cycleSetAsideCents')
           ..write(')'))
         .toString();
   }
@@ -4123,6 +4227,7 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
     paused,
     sortOrder,
     createdOn,
+    cycleSetAsideCents,
   );
   @override
   bool operator ==(Object other) =>
@@ -4137,7 +4242,8 @@ class GoalRow extends DataClass implements Insertable<GoalRow> {
           other.targetDate == this.targetDate &&
           other.paused == this.paused &&
           other.sortOrder == this.sortOrder &&
-          other.createdOn == this.createdOn);
+          other.createdOn == this.createdOn &&
+          other.cycleSetAsideCents == this.cycleSetAsideCents);
 }
 
 class GoalsCompanion extends UpdateCompanion<GoalRow> {
@@ -4151,6 +4257,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
   final Value<bool> paused;
   final Value<int> sortOrder;
   final Value<LocalDate?> createdOn;
+  final Value<int?> cycleSetAsideCents;
   final Value<int> rowid;
   const GoalsCompanion({
     this.id = const Value.absent(),
@@ -4163,6 +4270,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     this.paused = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.createdOn = const Value.absent(),
+    this.cycleSetAsideCents = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   GoalsCompanion.insert({
@@ -4176,6 +4284,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     this.paused = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.createdOn = const Value.absent(),
+    this.cycleSetAsideCents = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -4194,6 +4303,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     Expression<bool>? paused,
     Expression<int>? sortOrder,
     Expression<String>? createdOn,
+    Expression<int>? cycleSetAsideCents,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4208,6 +4318,8 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
       if (paused != null) 'paused': paused,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (createdOn != null) 'created_on': createdOn,
+      if (cycleSetAsideCents != null)
+        'cycle_set_aside_cents': cycleSetAsideCents,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4223,6 +4335,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
     Value<bool>? paused,
     Value<int>? sortOrder,
     Value<LocalDate?>? createdOn,
+    Value<int?>? cycleSetAsideCents,
     Value<int>? rowid,
   }) {
     return GoalsCompanion(
@@ -4236,6 +4349,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
       paused: paused ?? this.paused,
       sortOrder: sortOrder ?? this.sortOrder,
       createdOn: createdOn ?? this.createdOn,
+      cycleSetAsideCents: cycleSetAsideCents ?? this.cycleSetAsideCents,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4279,6 +4393,9 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
         $GoalsTable.$convertercreatedOnn.toSql(createdOn.value),
       );
     }
+    if (cycleSetAsideCents.present) {
+      map['cycle_set_aside_cents'] = Variable<int>(cycleSetAsideCents.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4298,6 +4415,7 @@ class GoalsCompanion extends UpdateCompanion<GoalRow> {
           ..write('paused: $paused, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('createdOn: $createdOn, ')
+          ..write('cycleSetAsideCents: $cycleSetAsideCents, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7571,6 +7689,7 @@ typedef $$SettingsRowsTableCreateCompanionBuilder =
       required OverspendStrategy overspendStrategy,
       Value<bool> onboarded,
       Value<LocalDate?> lastBackupOn,
+      Value<LocalDate?> caughtUpThrough,
       Value<bool> remindLogSpends,
       Value<int> remindLogAt,
       Value<bool> remindBills,
@@ -7599,6 +7718,7 @@ typedef $$SettingsRowsTableUpdateCompanionBuilder =
       Value<OverspendStrategy> overspendStrategy,
       Value<bool> onboarded,
       Value<LocalDate?> lastBackupOn,
+      Value<LocalDate?> caughtUpThrough,
       Value<bool> remindLogSpends,
       Value<int> remindLogAt,
       Value<bool> remindBills,
@@ -7691,6 +7811,12 @@ class $$SettingsRowsTableFilterComposer
   ColumnWithTypeConverterFilters<LocalDate?, LocalDate, String>
   get lastBackupOn => $composableBuilder(
     column: $table.lastBackupOn,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<LocalDate?, LocalDate, String>
+  get caughtUpThrough => $composableBuilder(
+    column: $table.caughtUpThrough,
     builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
@@ -7829,6 +7955,11 @@ class $$SettingsRowsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get caughtUpThrough => $composableBuilder(
+    column: $table.caughtUpThrough,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get remindLogSpends => $composableBuilder(
     column: $table.remindLogSpends,
     builder: (column) => ColumnOrderings(column),
@@ -7961,6 +8092,12 @@ class $$SettingsRowsTableAnnotationComposer
         builder: (column) => column,
       );
 
+  GeneratedColumnWithTypeConverter<LocalDate?, String> get caughtUpThrough =>
+      $composableBuilder(
+        column: $table.caughtUpThrough,
+        builder: (column) => column,
+      );
+
   GeneratedColumn<bool> get remindLogSpends => $composableBuilder(
     column: $table.remindLogSpends,
     builder: (column) => column,
@@ -8065,6 +8202,7 @@ class $$SettingsRowsTableTableManager
                     const Value.absent(),
                 Value<bool> onboarded = const Value.absent(),
                 Value<LocalDate?> lastBackupOn = const Value.absent(),
+                Value<LocalDate?> caughtUpThrough = const Value.absent(),
                 Value<bool> remindLogSpends = const Value.absent(),
                 Value<int> remindLogAt = const Value.absent(),
                 Value<bool> remindBills = const Value.absent(),
@@ -8091,6 +8229,7 @@ class $$SettingsRowsTableTableManager
                 overspendStrategy: overspendStrategy,
                 onboarded: onboarded,
                 lastBackupOn: lastBackupOn,
+                caughtUpThrough: caughtUpThrough,
                 remindLogSpends: remindLogSpends,
                 remindLogAt: remindLogAt,
                 remindBills: remindBills,
@@ -8119,6 +8258,7 @@ class $$SettingsRowsTableTableManager
                 required OverspendStrategy overspendStrategy,
                 Value<bool> onboarded = const Value.absent(),
                 Value<LocalDate?> lastBackupOn = const Value.absent(),
+                Value<LocalDate?> caughtUpThrough = const Value.absent(),
                 Value<bool> remindLogSpends = const Value.absent(),
                 Value<int> remindLogAt = const Value.absent(),
                 Value<bool> remindBills = const Value.absent(),
@@ -8145,6 +8285,7 @@ class $$SettingsRowsTableTableManager
                 overspendStrategy: overspendStrategy,
                 onboarded: onboarded,
                 lastBackupOn: lastBackupOn,
+                caughtUpThrough: caughtUpThrough,
                 remindLogSpends: remindLogSpends,
                 remindLogAt: remindLogAt,
                 remindBills: remindBills,
@@ -9317,6 +9458,7 @@ typedef $$GoalsTableCreateCompanionBuilder = GoalsCompanion Function({
   Value<bool> paused,
   Value<int> sortOrder,
   Value<LocalDate?> createdOn,
+  Value<int?> cycleSetAsideCents,
   Value<int> rowid,
 });
 typedef $$GoalsTableUpdateCompanionBuilder = GoalsCompanion Function({
@@ -9330,6 +9472,7 @@ typedef $$GoalsTableUpdateCompanionBuilder = GoalsCompanion Function({
   Value<bool> paused,
   Value<int> sortOrder,
   Value<LocalDate?> createdOn,
+  Value<int?> cycleSetAsideCents,
   Value<int> rowid,
 });
 
@@ -9394,6 +9537,11 @@ class $$GoalsTableFilterComposer
         column: $table.createdOn,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
+
+  ColumnFilters<int> get cycleSetAsideCents => $composableBuilder(
+    column: $table.cycleSetAsideCents,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$GoalsTableOrderingComposer
@@ -9454,6 +9602,11 @@ class $$GoalsTableOrderingComposer
     column: $table.createdOn,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get cycleSetAsideCents => $composableBuilder(
+    column: $table.cycleSetAsideCents,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$GoalsTableAnnotationComposer
@@ -9503,6 +9656,11 @@ class $$GoalsTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<LocalDate?, String> get createdOn =>
       $composableBuilder(column: $table.createdOn, builder: (column) => column);
+
+  GeneratedColumn<int> get cycleSetAsideCents => $composableBuilder(
+    column: $table.cycleSetAsideCents,
+    builder: (column) => column,
+  );
 }
 
 class $$GoalsTableTableManager
@@ -9543,6 +9701,7 @@ class $$GoalsTableTableManager
                 Value<bool> paused = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<LocalDate?> createdOn = const Value.absent(),
+                Value<int?> cycleSetAsideCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GoalsCompanion(
                 id: id,
@@ -9555,6 +9714,7 @@ class $$GoalsTableTableManager
                 paused: paused,
                 sortOrder: sortOrder,
                 createdOn: createdOn,
+                cycleSetAsideCents: cycleSetAsideCents,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9569,6 +9729,7 @@ class $$GoalsTableTableManager
                 Value<bool> paused = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<LocalDate?> createdOn = const Value.absent(),
+                Value<int?> cycleSetAsideCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GoalsCompanion.insert(
                 id: id,
@@ -9581,6 +9742,7 @@ class $$GoalsTableTableManager
                 paused: paused,
                 sortOrder: sortOrder,
                 createdOn: createdOn,
+                cycleSetAsideCents: cycleSetAsideCents,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -16,19 +16,6 @@ class VaultScreen extends StatefulWidget {
   State<VaultScreen> createState() => _VaultScreenState();
 }
 
-/// Demo income for the last 8 weeks, in cents, until weekly history is
-/// computed from entries.
-const _demoWeeklyIncome = [
-  26000,
-  78000,
-  37000,
-  2000,
-  94000,
-  42000,
-  53000,
-  57000,
-];
-
 class _VaultScreenState extends State<VaultScreen> {
   bool _editing = false;
 
@@ -46,6 +33,21 @@ class _VaultScreenState extends State<VaultScreen> {
     // Releases happen every Monday after the last one.
     final release = mondayAfter(vault.lastReleaseDate ?? store.today);
     final active = vault.isActive;
+    final income = store.weeklyIncomeCents;
+    final hasIncome = income.any((w) => w > 0);
+
+    // A first steady pay to start from: the average week of the last 8,
+    // rounded down to a whole 10, or the lowest step without history.
+    void setUp() {
+      final average = income.fold(0, (a, b) => a + b) ~/ income.length;
+      store.updateVault(
+        vault.copyWith(
+          steadyPayWeeklyCents: (average ~/ 1000 * 1000).clamp(30000, 150000),
+        ),
+      );
+      // Show + / − straight away to fine-tune it.
+      setState(() => _editing = true);
+    }
 
     void adjust(int delta) => store.updateVault(
       vault.copyWith(
@@ -55,10 +57,33 @@ class _VaultScreenState extends State<VaultScreen> {
 
     return TabBody(
       children: [
-        const TabTitle(
+        TabTitle(
           'Paycheck Vault',
           subtitle: 'Uneven income in, steady pay out',
+          trailing: active
+              ? CircleIconButton(
+                  icon: Icons.help_outline_rounded,
+                  label: 'How the Vault works',
+                  onTap: () => showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (context) => const SafeArea(
+                      top: false,
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          SteadySpace.screenMargin,
+                          0,
+                          SteadySpace.screenMargin,
+                          SteadySpace.s6,
+                        ),
+                        child: VaultExplainer(),
+                      ),
+                    ),
+                  ),
+                )
+              : null,
         ),
+        if (!active) const Panel(child: VaultExplainer()),
         Container(
           padding: const EdgeInsets.all(SteadySpace.s5),
           decoration: BoxDecoration(
@@ -103,7 +128,7 @@ class _VaultScreenState extends State<VaultScreen> {
               Text(
                 active
                     ? 'Next release to your daily number · ${formatShortDay(release)}'
-                    : 'Not set yet. Pick a weekly amount you can count on.',
+                    : "Not set yet. Pick what you'd live on in a slow week.",
                 style: SteadyType.caption.copyWith(
                   fontWeight: FontWeight.w500,
                   color: c.onInverseMuted,
@@ -139,11 +164,20 @@ class _VaultScreenState extends State<VaultScreen> {
                 ],
               ),
               const SizedBox(height: 10),
-              _IncomeChart(weeks: _demoWeeklyIncome, steady: steady),
+              if (hasIncome)
+                _IncomeChart(weeks: income, steady: steady)
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: SteadySpace.s4),
+                  child: Text(
+                    'No income logged in the last 8 weeks. Log pay when it '
+                    'arrives and each week shows up here.',
+                    style: SteadyType.body.copyWith(color: c.muted),
+                  ),
+                ),
               const SizedBox(height: 10),
               Text(
-                'Big weeks fill the vault. Slow weeks are paid from it, so your daily number never swings. '
-                'It is a reserve inside Steady; no real money moves.',
+                'Big weeks fill the vault. Slow weeks are paid from it, so your daily number never swings.',
                 style: SteadyType.caption.copyWith(
                   fontWeight: FontWeight.w500,
                   color: c.muted,
@@ -152,56 +186,59 @@ class _VaultScreenState extends State<VaultScreen> {
             ],
           ),
         ),
-        Panel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Vault balance',
-                      style: SteadyType.body.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    whole(balance),
-                    style: SteadyType.heading.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Bar(
-                value: vault.targetCents == 0 ? 0 : balance / vault.targetCents,
-              ),
-              const SizedBox(height: 10),
-              DefaultTextStyle(
-                style: SteadyType.caption.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: c.muted,
-                ),
-                child: Row(
+        if (active || balance != 0)
+          Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'Covers ${weeks.toStringAsFixed(1)} slow weeks',
+                        'Vault balance',
+                        style: SteadyType.body.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     Text(
-                      'Target: ${vault.targetWeeks} weeks · ${whole(vault.targetCents)}',
+                      whole(balance),
+                      style: SteadyType.heading.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                Bar(
+                  value: vault.targetCents == 0
+                      ? 0
+                      : balance / vault.targetCents,
+                ),
+                const SizedBox(height: 10),
+                DefaultTextStyle(
+                  style: SteadyType.caption.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: c.muted,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Covers ${weeks.toStringAsFixed(1)} slow weeks',
+                        ),
+                      ),
+                      Text(
+                        'Target: ${vault.targetWeeks} weeks · ${whole(vault.targetCents)}',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        if (_editing || !active)
+        if (_editing)
           Panel(
             borderColor: c.primary,
             borderWidth: 2,
@@ -265,7 +302,85 @@ class _VaultScreenState extends State<VaultScreen> {
           kind: ButtonKind.secondary,
           onPressed: active
               ? () => setState(() => _editing = !_editing)
-              : () => adjust(30000),
+              : setUp,
+        ),
+      ],
+    );
+  }
+}
+
+/// What the Vault is, in three steps. Inline until it's set up; the "?"
+/// button shows it after that.
+class VaultExplainer extends StatelessWidget {
+  const VaultExplainer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    Widget step(int n, String lead, String body) => Padding(
+      padding: const EdgeInsets.only(top: SteadySpace.s3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: c.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$n',
+              style: SteadyType.caption.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(width: SteadySpace.s3),
+          Expanded(
+            child: LeadText(lead: lead, body: body),
+          ),
+        ],
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('How the Vault works', style: SteadyType.heading),
+        Text(
+          'For pay that changes week to week: freelance, gig work, commission.',
+          style: SteadyType.caption.copyWith(
+            fontWeight: FontWeight.w500,
+            color: c.muted,
+          ),
+        ),
+        step(
+          1,
+          'Pay goes in.',
+          'When you log income, choose Paycheck Vault. It waits there '
+              "instead of landing on today's number all at once.",
+        ),
+        step(
+          2,
+          'Steady pay comes out.',
+          'Every Monday, your steady pay moves from the Vault into your '
+              'daily number, like a regular paycheck.',
+        ),
+        step(
+          3,
+          'Big weeks cover slow ones.',
+          'A great week tops the Vault up; a slow week is paid from it. '
+              'Aim for about 4 weeks of steady pay inside.',
+        ),
+        const SizedBox(height: SteadySpace.s3),
+        Text(
+          'No real money moves. Keep it in your bank account as usual; the '
+          'Vault is how Steady counts it, so you don\'t spend next month\'s '
+          'rent in a good week.',
+          style: SteadyType.caption.copyWith(
+            fontWeight: FontWeight.w500,
+            color: c.muted,
+          ),
         ),
       ],
     );
@@ -303,7 +418,7 @@ class _IncomeChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     const height = 120.0;
-    final max = [...weeks, steady].reduce((a, b) => a > b ? a : b) * 1.03;
+    final max = [...weeks, steady, 1].reduce((a, b) => a > b ? a : b) * 1.03;
     return Semantics(
       label: 'Income for the last 8 weeks compared with steady pay',
       child: SizedBox(

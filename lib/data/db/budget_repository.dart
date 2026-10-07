@@ -130,6 +130,7 @@ class BudgetRepository {
           overspendStrategy: s.overspendStrategy,
           onboarded: Value(s.onboarded),
           lastBackupOn: Value(s.lastBackupOn),
+          caughtUpThrough: Value(s.caughtUpThrough),
           remindLogSpends: Value(s.reminders.logSpends),
           remindLogAt: Value(s.reminders.logAtMinutes),
           remindPayday: Value(s.reminders.payday),
@@ -254,6 +255,7 @@ class BudgetRepository {
           targetDate: Value(g.targetDate),
           paused: Value(g.paused),
           createdOn: Value(g.createdOn),
+          cycleSetAsideCents: Value(g.cycleSetAsideCents),
           sortOrder: sortOrder == null
               ? const Value.absent()
               : Value(sortOrder),
@@ -554,6 +556,7 @@ class BudgetRepository {
     overspendStrategy: r.overspendStrategy,
     onboarded: r.onboarded,
     lastBackupOn: r.lastBackupOn,
+    caughtUpThrough: r.caughtUpThrough,
     reminders: ReminderSettings(
       logSpends: r.remindLogSpends,
       logAtMinutes: r.remindLogAt,
@@ -617,5 +620,6 @@ class BudgetRepository {
     targetDate: r.targetDate,
     paused: r.paused,
     createdOn: r.createdOn,
+    cycleSetAsideCents: r.cycleSetAsideCents,
   );
 }

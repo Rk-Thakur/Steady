@@ -201,7 +201,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Take it from Fun money instead'));
+      await tester.tap(find.text('Cover it from Fun instead'));
       await tester.pumpAndSettle();
       expect(find.text('Sorted.'), findsOneWidget);
       expect(
@@ -210,5 +210,18 @@ void main() {
       );
       expect(find.textContaining('Spend less on fun'), findsOneWidget);
     });
+  });
+
+  test('limit levels: fine under 80%, close from 80%, over past it', () {
+    expect(
+      limitLevel(limitCents: 10000, leftAfterCents: 2001),
+      LimitLevel.fine,
+    );
+    expect(
+      limitLevel(limitCents: 10000, leftAfterCents: 2000),
+      LimitLevel.close,
+    );
+    expect(limitLevel(limitCents: 10000, leftAfterCents: 0), LimitLevel.close);
+    expect(limitLevel(limitCents: 10000, leftAfterCents: -1), LimitLevel.over);
   });
 }

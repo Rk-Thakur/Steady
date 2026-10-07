@@ -64,43 +64,60 @@ class GoalsScreen extends StatelessWidget {
             color: c.primarySoft,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Set aside for goals',
-                      style: SteadyType.body.copyWith(fontSize: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Set aside for goals',
+                          style: SteadyType.body.copyWith(fontSize: 14),
+                        ),
+                        Text(
+                          'Already out of your daily number',
+                          style: SteadyType.caption.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: c.mutedStrong,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'Already out of your daily number',
-                      style: SteadyType.caption.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: c.mutedStrong,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text.rich(
-                TextSpan(
-                  children: [
+                  ),
+                  Text.rich(
                     TextSpan(
-                      text: whole(store.goalsDailyCents),
-                      style: SteadyType.title,
+                      children: [
+                        TextSpan(
+                          text: whole(store.goalsDailyCents),
+                          style: SteadyType.title,
+                        ),
+                        TextSpan(
+                          text: '/day',
+                          style: SteadyType.body.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: c.mutedStrong,
+                          ),
+                        ),
+                      ],
                     ),
-                    TextSpan(
-                      text: '/day',
-                      style: SteadyType.body.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: c.mutedStrong,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+              if (store.plan.goalSetAsideCents > 0) ...[
+                const SizedBox(height: SteadySpace.s2),
+                Text(
+                  'This pay cycle: ${whole(store.plan.goalSetAsideCents)} held '
+                  'back. It moves into your goals on payday, '
+                  '${formatShortDay(store.nextPayday)}.',
+                  style: SteadyType.caption.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: c.mutedStrong,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -171,6 +188,17 @@ class GoalsScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (store.cycleSetAsideFor(g) > 0) ...[
+                  const SizedBox(height: SteadySpace.s1),
+                  Text(
+                    '+${whole(store.cycleSetAsideFor(g))} set aside this cycle · '
+                    'added on payday',
+                    style: SteadyType.caption.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: c.positive,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -196,6 +224,7 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
         ? ''
         : centsToField(widget.args.targetCents!),
   );
+  final _saved = TextEditingController();
   GoalKind _kind = GoalKind.thing;
   int _months = 5;
 
@@ -203,6 +232,7 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
   void dispose() {
     _name.dispose();
     _target.dispose();
+    _saved.dispose();
     super.dispose();
   }
 
@@ -211,10 +241,23 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
     final store = StoreScope.of(context);
     final symbol = store.symbol;
     final target = parseCents(_target.text);
-    final perDay = target == null || target <= 0
+    // Money already put away for it counts from the start.
+    final saved = math.max(0, parseCents(_saved.text) ?? 0);
+    final remaining = target == null ? 0 : target - saved;
+    final alreadyThere = target != null && target > 0 && remaining <= 0;
+    final perDay = target == null || target <= 0 || alreadyThere
         ? null
-        : (target + _months * 30 - 1) ~/ (_months * 30);
-    final allowance = store.dailyNumber.dailyAllowanceCents;
+        : (remaining + _months * 30 - 1) ~/ (_months * 30);
+    final number = store.dailyNumber;
+    final allowance = number.dailyAllowanceCents;
+    // Held back from today to payday, like the store will (never more
+    // than the goal needs).
+    final after = perDay == null
+        ? allowance
+        : floorDiv(
+            number.poolCents - math.min(perDay * number.daysLeft, remaining),
+            number.daysLeft,
+          );
     final name = _name.text.trim();
     String m(int cents) => formatMoney(cents, symbol: symbol);
 
@@ -225,7 +268,7 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
           name: name.isEmpty ? _kind.label : name,
           kind: _kind,
           targetCents: target!,
-          savedCents: 0,
+          savedCents: saved,
           dailySetAsideCents: perDay!,
           targetDate: store.today.addDays(_months * 30),
           createdOn: store.today,
@@ -276,6 +319,33 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
             ),
           ],
         ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SteadyField(
+              label: 'Already saved (optional)',
+              controller: _saved,
+              hint: '${symbol}0',
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: SteadySpace.s2),
+            Text(
+              alreadyThere
+                  ? "That's already the whole target. Nothing more to set aside."
+                  : "Money you've already put away for this, like in a savings "
+                        "account. It isn't taken from your daily number.",
+              style: SteadyType.caption.copyWith(
+                fontWeight: FontWeight.w500,
+                color: alreadyThere
+                    ? context.colors.warningFg
+                    : context.colors.muted,
+              ),
+            ),
+          ],
+        ),
         ChipGroup<int>(
           label: 'How fast?',
           height: 44,
@@ -314,12 +384,22 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
                   label: 'Your daily number',
                   value: perDay == null
                       ? m(allowance)
-                      : '${m(allowance)} → ${m(allowance - perDay)}',
+                      : '${m(allowance)} → ${m(after)}',
                 ),
               ],
             ),
           ),
         ),
+        if (perDay != null)
+          Text(
+            'Starts today. It comes out of your daily number until payday '
+            '(${formatShortDay(store.nextPayday)}), then moves into the goal. '
+            'Same again every pay cycle.',
+            style: SteadyType.caption.copyWith(
+              fontWeight: FontWeight.w500,
+              color: context.colors.muted,
+            ),
+          ),
       ],
     );
   }
@@ -354,6 +434,7 @@ class GoalDetailScreen extends StatelessWidget {
         ? 'first-quarter badge earned'
         : 'first badge at 25%';
     final eta = _goalMeta(store, g).split(' · ').last;
+    final held = store.cycleSetAsideFor(g);
 
     Future<void> addMoney() async {
       final added = await _askAmount(context, symbol);
@@ -429,6 +510,17 @@ class GoalDetailScreen extends StatelessWidget {
                   ],
                 ),
               ),
+              if (held > 0) ...[
+                const SizedBox(height: SteadySpace.s2),
+                Text(
+                  '+${m(held)} set aside this cycle · added on '
+                  '${formatShortDay(store.nextPayday)}',
+                  style: SteadyType.caption.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: c.onHero,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -456,32 +548,33 @@ class GoalDetailScreen extends StatelessWidget {
               leadColor: c.warningFg,
             ),
           ),
-        const SoftBanner(
-          child: LeadText(
-            lead: 'Leftover sweep is on.',
-            body: "Money you don't spend by midnight can move here instead of rolling over.",
-          ),
-        ),
-        // Demo history until set-asides are recorded as entries.
-        GroupedList(
-          padding: const EdgeInsets.symmetric(horizontal: SteadySpace.s4),
-          children: [
-            for (final (label, days, cents) in const [
-              ('Payday set-aside', 1, 20000),
-              ('Leftover sweep', 6, 1840),
-              ('Payday set-aside', 14, 20000),
-              ('Leftover sweep', 23, 1175),
-            ])
-              ValueRow(
-                label: label,
-                labelWidget: NameMeta(
-                  name: label,
-                  meta: formatShortDate(store.today.addDays(-days)),
-                ),
-                value: formatMoney(cents, symbol: symbol, signed: true),
-                valueColor: c.positive,
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'How it fills up',
+                style: SteadyType.heading.copyWith(fontWeight: FontWeight.w800),
               ),
-          ],
+              const SizedBox(height: SteadySpace.s2),
+              Text(
+                g.isReached
+                    ? 'Reached. Nothing more comes out of your daily number.'
+                    : g.paused
+                    ? "Paused: nothing is set aside until you resume. What's "
+                          'already held this cycle still moves in on payday.'
+                    : 'Every day, ${m(g.dailySetAsideCents)} comes out of your '
+                          "daily number. It's held until payday, then added "
+                          "here. You don't need to move it yourself.",
+                style: SteadyType.body.copyWith(color: c.muted),
+              ),
+              const SizedBox(height: SteadySpace.s2),
+              Text(
+                'Put money away yourself? Use Add money.',
+                style: SteadyType.body.copyWith(color: c.muted),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -511,6 +604,15 @@ class GoalDetailScreen extends StatelessWidget {
               controller: controller,
               hint: '${symbol}0.00',
               autofocus: true,
+            ),
+            const SizedBox(height: SteadySpace.s2),
+            Text(
+              "Money you've put away yourself, like in a savings account. "
+              "It isn't taken from your daily number.",
+              style: SteadyType.caption.copyWith(
+                fontWeight: FontWeight.w500,
+                color: context.colors.muted,
+              ),
             ),
             const SizedBox(height: SteadySpace.s4),
             SteadyButton(

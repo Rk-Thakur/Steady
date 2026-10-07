@@ -31,8 +31,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
         formatMoney(cents, symbol: symbol, showCents: false);
 
     // Rolling window ending today.
+    final period = Period.lastDays(store.today, _month ? 30 : 7);
     final insights = spendingInsights(
-      period: Period.lastDays(store.today, _month ? 30 : 7),
+      period: period,
       entries: store.entries,
       categories: store.categories,
     );
@@ -46,6 +47,18 @@ class _InsightsScreenState extends State<InsightsScreen> {
       insights.byMood.values.fold(0, (a, b) => math.max(a, b)),
     );
     final trigger = insights.trigger;
+    // Spends tagged with a feeling (not "neutral") in this window.
+    final tagged = store.entries
+        .where(
+          (e) =>
+              e.isSpend &&
+              e.mood != null &&
+              e.mood != Mood.neutral &&
+              !e.localDate.isBefore(period.start) &&
+              !e.localDate.isAfter(period.end),
+        )
+        .length;
+    const enough = 5;
     final plannedFraction = insights.taggedCents == 0
         ? 0.0
         : insights.plannedCents / insights.taggedCents;
@@ -108,7 +121,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               const SizedBox(height: 6),
               Text(
                 trigger == null
-                    ? 'Add a mood when you log a spend, and what drives your spending shows up here.'
+                    ? 'Tag moods for a week and your spending patterns show up here.'
                     : "When you're ${trigger.mood.label.toLowerCase()}, "
                           '${trigger.category.toLowerCase()} costs you '
                           '${whole(trigger.cents)} a ${_month ? 'month' : 'week'}.',
@@ -130,51 +143,66 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 style: SteadyType.body.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 11),
-              for (final mood in moods)
+              if (tagged < enough)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 11),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 84,
-                        child: Text(
-                          mood.label,
-                          style: SteadyType.caption.copyWith(
-                            fontWeight: mood == topMood
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                            color: mood == Mood.neutral ? c.muted : c.ink,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Bar(
-                          value: insights.byMood[mood]! / maxMood,
-                          height: 12,
-                          track: Colors.transparent,
-                          fill: mood == topMood
-                              ? c.primary
-                              : mood == Mood.neutral
-                              ? c.line
-                              : c.billPending,
-                        ),
-                      ),
-                      SizedBox(
-                        width: 52,
-                        child: Text(
-                          whole(insights.byMood[mood]!),
-                          textAlign: TextAlign.right,
-                          style: SteadyType.caption.copyWith(
-                            fontWeight: mood == topMood
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: mood == Mood.neutral ? c.muted : c.ink,
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    tagged == 0
+                        ? 'No moods yet. When you log a spend, pick how you '
+                              'feel under "How are you feeling?". After a week '
+                              'or so, you\'ll see which moods cost you most.'
+                        : '$tagged of $enough tagged spends so far. Keep '
+                              'picking a mood when you log, and the pattern '
+                              'gets clearer.',
+                    style: SteadyType.body.copyWith(color: c.muted),
                   ),
                 ),
+              if (tagged > 0)
+                for (final mood in moods)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 11),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 84,
+                          child: Text(
+                            mood.label,
+                            style: SteadyType.caption.copyWith(
+                              fontWeight: mood == topMood
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                              color: mood == Mood.neutral ? c.muted : c.ink,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Bar(
+                            value: insights.byMood[mood]! / maxMood,
+                            height: 12,
+                            track: Colors.transparent,
+                            fill: mood == topMood
+                                ? c.primary
+                                : mood == Mood.neutral
+                                ? c.line
+                                : c.billPending,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 52,
+                          child: Text(
+                            whole(insights.byMood[mood]!),
+                            textAlign: TextAlign.right,
+                            style: SteadyType.caption.copyWith(
+                              fontWeight: mood == topMood
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: mood == Mood.neutral ? c.muted : c.ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
             ],
           ),
         ),

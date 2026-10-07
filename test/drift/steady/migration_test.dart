@@ -211,4 +211,39 @@ void main() {
     );
     await db.close();
   });
+
+  test(
+    'v9 → v10: goals keep everything; per-cycle amount starts unknown',
+    () async {
+      final schema = await verifier.schemaAt(9);
+      schema.rawDatabase.execute(
+        "INSERT INTO goals (id, name, kind, target_cents, saved_cents, "
+        "daily_set_aside_cents, paused, sort_order, created_on) "
+        "VALUES ('fund', 'Emergency fund', 'safety', 300000, 186000, 1538, 0, "
+        "0, '2026-09-01')",
+      );
+      final db = SteadyDatabase(schema.newConnection());
+      final goal = (await BudgetRepository(db).load()).goals.single;
+      expect(goal.savedCents, 186000);
+      expect(goal.dailySetAsideCents, 1538);
+      // The store fills this in from the cycle's total when it loads.
+      expect(goal.cycleSetAsideCents, isNull);
+      await db.close();
+    },
+  );
+
+  test('v10 → v11: settings keep everything; catch-up starts unset', () async {
+    final schema = await verifier.schemaAt(10);
+    schema.rawDatabase.execute(
+      "INSERT INTO settings_rows (id, currency, pay_frequency, next_payday, "
+      "income_type, theme, overspend_strategy, last_backup_on) "
+      "VALUES (1, 'usd', 'monthly', '2026-10-15', 'salary', 'system', "
+      "'spreadEvenly', '2026-09-30')",
+    );
+    final db = SteadyDatabase(schema.newConnection());
+    final row = await db.select(db.settingsRows).getSingle();
+    expect(row.lastBackupOn.toString(), '2026-09-30');
+    expect(row.caughtUpThrough, isNull);
+    await db.close();
+  });
 }

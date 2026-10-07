@@ -155,6 +155,7 @@ class AppSettings {
     this.biometricUnlock = false,
     this.pin,
     this.lastBackupOn,
+    this.caughtUpThrough,
     this.overspendStrategy = OverspendStrategy.spreadEvenly,
     this.onboarded = true,
     this.reminders = const ReminderSettings(),
@@ -183,6 +184,10 @@ class AppSettings {
 
   /// When the user last created a backup file.
   final LocalDate? lastBackupOn;
+
+  /// Catch-up: every day up to this one is accounted for, even with nothing
+  /// logged ("No spends that day").
+  final LocalDate? caughtUpThrough;
   final OverspendStrategy overspendStrategy;
   final bool onboarded;
   final ReminderSettings reminders;
@@ -202,6 +207,7 @@ class AppSettings {
     bool? biometricUnlock,
     String? Function()? pin,
     LocalDate? Function()? lastBackupOn,
+    LocalDate? Function()? caughtUpThrough,
     OverspendStrategy? overspendStrategy,
     bool? onboarded,
     ReminderSettings? reminders,
@@ -221,6 +227,9 @@ class AppSettings {
       biometricUnlock: biometricUnlock ?? this.biometricUnlock,
       pin: pin != null ? pin() : this.pin,
       lastBackupOn: lastBackupOn != null ? lastBackupOn() : this.lastBackupOn,
+      caughtUpThrough: caughtUpThrough != null
+          ? caughtUpThrough()
+          : this.caughtUpThrough,
       overspendStrategy: overspendStrategy ?? this.overspendStrategy,
       onboarded: onboarded ?? this.onboarded,
       reminders: reminders ?? this.reminders,
