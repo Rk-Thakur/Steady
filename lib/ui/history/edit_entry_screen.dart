@@ -29,7 +29,9 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
     if (_amount != null) return;
     final e = StoreScope.of(context).entryById(widget.entryId);
     _amount = TextEditingController(
-      text: e == null ? '' : centsToField(e.amountCents),
+      text: e == null
+          ? ''
+          : centsToField(e.amountCents, symbol: MoneySymbol.read(context)),
     );
     _where = TextEditingController(text: e?.merchant ?? '');
     _note = TextEditingController(text: e?.note ?? '');

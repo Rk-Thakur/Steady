@@ -34,7 +34,10 @@ class _CategoryEditScreenState extends State<CategoryEditScreen> {
     _limit = TextEditingController(
       text: _existing?.monthlyLimitCents == null
           ? ''
-          : centsToField(_existing!.monthlyLimitCents!),
+          : centsToField(
+              _existing!.monthlyLimitCents!,
+              symbol: MoneySymbol.read(context),
+            ),
     );
     _tone = _existing?.tone ?? CategoryTone.primary;
     _limitOn = _existing?.monthlyLimitCents != null;

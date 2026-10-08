@@ -423,7 +423,9 @@ class SteadyField extends StatelessWidget {
         keyboardType: amount
             ? const TextInputType.numberWithOptions(decimal: true)
             : keyboardType,
-        inputFormatters: amount ? [MoneyInputFormatter()] : null,
+        inputFormatters: amount
+            ? [MoneyInputFormatter(symbol: MoneySymbol.of(context))]
+            : null,
         onChanged: onChanged,
         readOnly: readOnly,
         onTap: onTap,
@@ -464,6 +466,11 @@ class SteadyField extends StatelessWidget {
 
 /// Lets only digits and one decimal point with at most two decimals through.
 class MoneyInputFormatter extends TextInputFormatter {
+  MoneyInputFormatter({this.symbol = r'$'});
+
+  /// Shown in front of what's typed: the user's currency.
+  final String symbol;
+
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
@@ -472,7 +479,7 @@ class MoneyInputFormatter extends TextInputFormatter {
     final cleaned = newValue.text.replaceAll(RegExp(r'[^0-9.]'), '');
     final ok = RegExp(r'^\d{0,7}(\.\d{0,2})?$').hasMatch(cleaned);
     if (!ok) return oldValue;
-    final text = cleaned.isEmpty ? '' : '\$$cleaned';
+    final text = cleaned.isEmpty ? '' : '$symbol$cleaned';
     return TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
@@ -489,9 +496,28 @@ int? parseCents(String text) {
   return (value * 100).round();
 }
 
-/// Text for an amount field from cents: 2340 → "$23.40".
-String centsToField(int cents) =>
-    '\$${(cents ~/ 100)}.${(cents % 100).toString().padLeft(2, '0')}';
+/// Text for an amount field from cents: 2340 → "$23.40" (or "€23.40").
+String centsToField(int cents, {required String symbol}) =>
+    '$symbol${(cents ~/ 100)}.${(cents % 100).toString().padLeft(2, '0')}';
+
+/// The currency symbol for amount fields, provided once above every screen
+/// so fields don't need the store.
+class MoneySymbol extends InheritedWidget {
+  const MoneySymbol({super.key, required this.symbol, required super.child});
+
+  final String symbol;
+
+  /// The user's symbol, or "$" outside the app (previews).
+  static String of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<MoneySymbol>()?.symbol ?? r'$';
+
+  /// Without subscribing: for setting up fields when a screen opens.
+  static String read(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<MoneySymbol>()?.symbol ?? r'$';
+
+  @override
+  bool updateShouldNotify(MoneySymbol oldWidget) => symbol != oldWidget.symbol;
+}
 
 // ─── Selection controls ────────────────────────────────────────────────────
 
@@ -1142,6 +1168,8 @@ Future<bool> confirmSheet(
   final result = await showModalBottomSheet<bool>(
     context: context,
     showDragHandle: false,
+    // Tall enough for large text; scrolls if it still doesn't fit.
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -1149,48 +1177,174 @@ Future<bool> confirmSheet(
       final c = context.colors;
       return SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SteadySpace.s5,
-            SteadySpace.s6,
-            SteadySpace.s5,
-            SteadySpace.s6,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title,
-                style: SteadyType.heading.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              SteadySpace.s5,
+              SteadySpace.s6,
+              SteadySpace.s5,
+              SteadySpace.s6,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  title,
+                  style: SteadyType.heading.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const SizedBox(height: SteadySpace.s3),
-              Text(
-                body,
-                style: SteadyType.body.copyWith(fontSize: 14, color: c.muted),
-              ),
-              const SizedBox(height: SteadySpace.s4),
-              SteadyButton(
-                confirmLabel,
-                kind: ButtonKind.danger,
-                onPressed: () => Navigator.of(context).pop(true),
-              ),
-              const SizedBox(height: SteadySpace.s3),
-              SteadyButton(
-                'Cancel',
-                kind: ButtonKind.secondary,
-                onPressed: () => Navigator.of(context).pop(false),
-              ),
-            ],
+                const SizedBox(height: SteadySpace.s3),
+                Text(
+                  body,
+                  style: SteadyType.body.copyWith(fontSize: 14, color: c.muted),
+                ),
+                const SizedBox(height: SteadySpace.s4),
+                SteadyButton(
+                  confirmLabel,
+                  kind: ButtonKind.danger,
+                  onPressed: () => Navigator.of(context).pop(true),
+                ),
+                const SizedBox(height: SteadySpace.s3),
+                SteadyButton(
+                  'Cancel',
+                  kind: ButtonKind.secondary,
+                  onPressed: () => Navigator.of(context).pop(false),
+                ),
+              ],
+            ),
           ),
         ),
       );
     },
   );
   return result ?? false;
+}
+
+/// A bottom sheet asking for one amount: a title, an optional intro, the
+/// field, an optional note under it, and a confirm button (enabled once the
+/// amount is above zero). Returns the cents, or null if dismissed.
+Future<int?> showAmountSheet(
+  BuildContext context, {
+  required String title,
+  String? intro,
+  required String label,
+  String? hint,
+  String? note,
+  required String confirmLabel,
+  int? initialCents,
+  bool autofocus = true,
+}) => showModalBottomSheet<int>(
+  context: context,
+  isScrollControlled: true,
+  builder: (context) => _AmountSheet(
+    title: title,
+    intro: intro,
+    label: label,
+    hint: hint,
+    note: note,
+    confirmLabel: confirmLabel,
+    initialCents: initialCents,
+    autofocus: autofocus,
+  ),
+);
+
+/// Owns its text field, so the field lives exactly as long as the sheet,
+/// closing animation included.
+class _AmountSheet extends StatefulWidget {
+  const _AmountSheet({
+    required this.title,
+    required this.intro,
+    required this.label,
+    required this.hint,
+    required this.note,
+    required this.confirmLabel,
+    required this.initialCents,
+    required this.autofocus,
+  });
+  final String title;
+  final String? intro;
+  final String label;
+  final String? hint;
+  final String? note;
+  final String confirmLabel;
+  final int? initialCents;
+  final bool autofocus;
+
+  @override
+  State<_AmountSheet> createState() => _AmountSheetState();
+}
+
+class _AmountSheetState extends State<_AmountSheet> {
+  late final _controller = TextEditingController(
+    text: widget.initialCents == null
+        ? ''
+        : centsToField(widget.initialCents!, symbol: MoneySymbol.read(context)),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final cents = parseCents(_controller.text);
+    final valid = cents != null && cents > 0;
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          SteadySpace.s5,
+          0,
+          SteadySpace.s5,
+          MediaQuery.viewInsetsOf(context).bottom + SteadySpace.s6,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.title, style: SteadyType.title.copyWith(fontSize: 24)),
+            if (widget.intro case final intro?) ...[
+              const SizedBox(height: SteadySpace.s2),
+              Text(
+                intro,
+                style: SteadyType.body.copyWith(fontSize: 14, color: c.muted),
+              ),
+            ],
+            const SizedBox(height: SteadySpace.s4),
+            SteadyField(
+              label: widget.label,
+              amount: true,
+              controller: _controller,
+              hint: widget.hint,
+              autofocus: widget.autofocus,
+              onChanged: (_) => setState(() {}),
+            ),
+            if (widget.note case final note?) ...[
+              const SizedBox(height: SteadySpace.s2),
+              Text(
+                note,
+                style: SteadyType.caption.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: c.muted,
+                ),
+              ),
+            ],
+            const SizedBox(height: SteadySpace.s4),
+            SteadyButton(
+              widget.confirmLabel,
+              onPressed: valid ? () => Navigator.of(context).pop(cents) : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Lists ─────────────────────────────────────────────────────────────────

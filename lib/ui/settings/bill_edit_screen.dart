@@ -42,9 +42,12 @@ class _BillEditScreenState extends State<BillEditScreen> {
     _name = TextEditingController(text: _existing?.name ?? pre?.name ?? '');
     _amount = TextEditingController(
       text: _existing != null
-          ? centsToField(_existing!.amountCents)
+          ? centsToField(
+              _existing!.amountCents,
+              symbol: MoneySymbol.read(context),
+            )
           : pre?.amountCents != null
-          ? centsToField(pre!.amountCents!)
+          ? centsToField(pre!.amountCents!, symbol: MoneySymbol.read(context))
           : '',
     );
     _due = _existing?.dueDate ?? store.today.addDays(pre?.dueInDays ?? 3);
@@ -238,56 +241,17 @@ class _PayCard extends StatelessWidget {
 
   static Future<void> _confirmPayment(BuildContext context, Bill bill) async {
     final store = StoreScope.of(context);
-    final controller = TextEditingController(
-      text: centsToField(bill.amountCents),
+    final paid = await showAmountSheet(
+      context,
+      title: 'Pay ${bill.name}',
+      intro: bill.isEstimate
+          ? 'Enter the real amount. It becomes the estimate for next time.'
+          : 'Logged as a spend today. The bill moves to its next due date.',
+      label: 'Amount paid',
+      confirmLabel: 'Mark as paid',
+      initialCents: bill.amountCents,
+      autofocus: bill.isEstimate,
     );
-    final paid = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheet) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          SteadySpace.s5,
-          0,
-          SteadySpace.s5,
-          MediaQuery.viewInsetsOf(sheet).bottom + SteadySpace.s6,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Pay ${bill.name}',
-              style: SteadyType.title.copyWith(fontSize: 24),
-            ),
-            const SizedBox(height: SteadySpace.s2),
-            Text(
-              bill.isEstimate
-                  ? 'Enter the real amount. It becomes the estimate for next time.'
-                  : 'Logged as a spend today. The bill moves to its next due date.',
-              style: SteadyType.body.copyWith(
-                fontSize: 14,
-                color: sheet.colors.muted,
-              ),
-            ),
-            const SizedBox(height: SteadySpace.s4),
-            SteadyField(
-              label: 'Amount paid',
-              amount: true,
-              controller: controller,
-              autofocus: bill.isEstimate,
-            ),
-            const SizedBox(height: SteadySpace.s4),
-            SteadyButton(
-              'Mark as paid',
-              onPressed: () {
-                final cents = parseCents(controller.text);
-                if (cents != null && cents > 0) Navigator.of(sheet).pop(cents);
-              },
-            ),
-          ],
-        ),
-      ),
-    ).whenComplete(controller.dispose);
     if (paid == null || !context.mounted) return;
     store.payBill(bill, amountCents: paid);
     Navigator.of(context).pop();

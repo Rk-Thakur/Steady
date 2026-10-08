@@ -62,16 +62,39 @@ void main() {
     expect(find.text('How the Vault works'), findsOneWidget);
     expect(find.text('Vault balance', skipOffstage: false), findsNothing);
 
-    // One week of $640 in 8 → $80 average, so it starts at the $300 floor.
     // To the bottom, clear of the floating tab bar.
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Set steady pay'));
     await tester.pumpAndSettle();
-    expect(store.vault.steadyPayWeeklyCents, 30000);
+
+    // One week of $640 in 8 → $80 average, offered as the start.
+    expect(find.text('Steady pay'), findsOneWidget);
     expect(
-      find.text('Lower pay = longer buffer', skipOffstage: false),
+      find.textContaining('Your average week, last 8 weeks: \$80'),
       findsOneWidget,
     );
+    expect(find.widgetWithText(TextField, r'$80.00'), findsOneWidget);
+
+    // Any amount can be typed (no $300 minimum any more).
+    await tester.enterText(find.byType(TextField).last, '125');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save steady pay'));
+    await tester.pumpAndSettle();
+    expect(store.vault.steadyPayWeeklyCents, 12500);
+
+    // Later: Adjust → Type an amount.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Adjust steady pay'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Type an amount'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, r'$125.00'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '410.50');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save steady pay'));
+    await tester.pumpAndSettle();
+    expect(store.vault.steadyPayWeeklyCents, 41050);
   });
 }

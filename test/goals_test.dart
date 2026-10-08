@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:steady/core/local_date.dart';
+import 'package:steady/core/money.dart';
 import 'package:steady/data/budget_store.dart';
 import 'package:steady/domain/models/models.dart';
 import 'package:steady/main.dart';
@@ -56,6 +57,27 @@ void main() {
       store.updateGoal(store.goalById('bike')!.copyWith(paused: false));
       expect(store.dailyNumber.dailyAllowanceCents, before);
     });
+  });
+
+  test('deleting a goal gives back what it held this cycle', () {
+    final store = sample();
+    store.addGoal(
+      Goal(
+        id: 'bike',
+        name: 'Bike',
+        targetCents: 50000,
+        savedCents: 0,
+        dailySetAsideCents: 1000,
+        createdOn: oct2,
+      ),
+    );
+    final before = store.dailyNumber.dailyAllowanceCents;
+    final total = store.plan.goalSetAsideCents;
+    final held = store.goalById('bike')!.cycleSetAsideCents!;
+    store.removeGoal('bike');
+    expect(store.goalById('bike'), isNull);
+    expect(store.plan.goalSetAsideCents, total - held);
+    expect(store.dailyNumber.dailyAllowanceCents, before + 1000);
   });
 
   group('screens', () {
@@ -142,6 +164,120 @@ void main() {
       );
       expect(find.textContaining('Leftover sweep'), findsNothing);
       expect(find.text('Payday set-aside'), findsNothing);
+    });
+
+    Future<Goal> openEdit(WidgetTester tester, BudgetStore store) async {
+      final g = store.goals.firstWhere((g) => g.isActive);
+      tester
+          .state<NavigatorState>(find.byType(Navigator).first)
+          .pushNamed(Routes.goalDetail, arguments: g.id);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      return g;
+    }
+
+    testWidgets('edit: filled in, keeps the pace, saves changes', (
+      tester,
+    ) async {
+      final store = await open(tester, Routes.goals);
+      final g = await openEdit(tester, store);
+      expect(find.text('Edit goal'), findsOneWidget);
+      expect(find.text(g.name), findsWidgets); // in the name field
+      final pace = formatMoney(g.dailySetAsideCents, symbol: r'$');
+      expect(find.text('Keep $pace/day'), findsOneWidget);
+      expect(find.text('Saved so far'), findsOneWidget);
+
+      // Rename and raise the target; same pace.
+      await tester.enterText(find.byType(TextField).at(0), 'Rainy day fund');
+      await tester.enterText(
+        find.byType(TextField).at(1),
+        '${(g.targetCents + 100000) / 100}',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      final saved = store.goalById(g.id)!;
+      expect(saved.name, 'Rainy day fund');
+      expect(saved.targetCents, g.targetCents + 100000);
+      expect(saved.dailySetAsideCents, g.dailySetAsideCents);
+      expect(saved.savedCents, g.savedCents);
+      expect(find.text('Rainy day fund'), findsWidgets); // back on detail
+    });
+
+    testWidgets('edit: a new pace changes the number, shown first', (
+      tester,
+    ) async {
+      final store = await open(tester, Routes.goals);
+      final g = await openEdit(tester, store);
+      final before = store.dailyNumber.dailyAllowanceCents;
+      await tester.tap(find.text('3 months'));
+      await tester.pumpAndSettle();
+      // The preview shows the drop before saving.
+      expect(
+        find.textContaining(
+          '${formatMoney(before, symbol: r'$')} → ',
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+      // What's still needed over 3 months (90 days), rounded up.
+      final pace = (g.remainingCents + 89) ~/ 90;
+      expect(store.goalById(g.id)!.dailySetAsideCents, pace);
+      final now = store.dailyNumber.dailyAllowanceCents;
+      if (pace < g.dailySetAsideCents) {
+        expect(now, greaterThan(before)); // slower: more to spend
+      } else {
+        expect(now, lessThan(before));
+      }
+    });
+
+    testWidgets('delete: explains the money, then back to the list', (
+      tester,
+    ) async {
+      final store = await open(tester, Routes.goals);
+      final g = await openEdit(tester, store);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -1000));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete goal'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete ${g.name}?'), findsOneWidget);
+      expect(
+        find.textContaining('no real money moves', skipOffstage: false),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Delete goal').last);
+      await tester.pumpAndSettle();
+
+      expect(store.goalById(g.id), isNull);
+      expect(find.text('Goals'), findsWidgets); // the list
+      expect(find.text('Edit goal'), findsNothing);
+    });
+
+    testWidgets('Add money adds to the goal and closes cleanly', (
+      tester,
+    ) async {
+      final store = await open(tester, Routes.goals);
+      final g = store.goals.firstWhere((g) => g.isActive);
+      tester
+          .state<NavigatorState>(find.byType(Navigator).first)
+          .pushNamed(Routes.goalDetail, arguments: g.id);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add money'));
+      await tester.pumpAndSettle();
+      final add = tester.widget<SteadyButton>(
+        find.widgetWithText(SteadyButton, 'Add to goal'),
+      );
+      expect(add.onPressed, isNull); // nothing typed yet
+      await tester.enterText(find.byType(TextField).last, '10');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add to goal'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(store.goalById(g.id)!.savedCents, g.savedCents + 1000);
     });
   });
 }

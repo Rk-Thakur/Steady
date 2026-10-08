@@ -29,7 +29,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _s = StoreScope.of(context).settings;
     _name = TextEditingController(text: _s.displayName ?? '');
     _rate = TextEditingController(
-      text: _s.hourlyRateCents == null ? '' : centsToField(_s.hourlyRateCents!),
+      text: _s.hourlyRateCents == null
+          ? ''
+          : centsToField(
+              _s.hourlyRateCents!,
+              symbol: MoneySymbol.read(context),
+            ),
     );
   }
 

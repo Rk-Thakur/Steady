@@ -14,6 +14,7 @@ import '../ui/app_router.dart';
 import '../ui/onboarding/onboarding_screens.dart';
 import '../ui/routes.dart';
 import '../ui/shell/home_shell.dart';
+import '../ui/widgets/kit.dart';
 import 'notifications.dart';
 
 class SteadyApp extends StatefulWidget {
@@ -210,7 +211,8 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
                 : SystemUiOverlayStyle.dark,
             child: Stack(
               children: [
-                ?child,
+                if (child != null)
+                  MoneySymbol(symbol: store.symbol, child: child),
                 if (_covered) const Positioned.fill(child: _PrivacyCover()),
               ],
             ),

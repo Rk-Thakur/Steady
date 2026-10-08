@@ -60,25 +60,24 @@ List<Goal> withCycleSetAsides(List<Goal> goals, int totalCents, int days) {
 }
 
 /// What [after] holds back for the rest of this cycle once a goal is
-/// started, paused, resumed, re-paced or topped up, with [daysLeft] days to
-/// payday (today included).
+/// started, paused, resumed, re-paced, re-targeted or topped up, with
+/// [daysLeft] days to payday (today included).
 ///
-/// Days already gone stay set aside (that money moves to the goal on
-/// payday); only the days ahead change. Never more than the goal still
-/// needs.
+/// Only the days ahead change: the held amount moves by the difference
+/// between the new and old daily set-aside over those days. Days already
+/// gone stay set aside (that money moves to the goal on payday). Never below
+/// nothing, nor more than the goal still needs.
 int cycleSetAsideAfterChange({
   required Goal? before,
   required Goal after,
   required int daysLeft,
 }) {
   final held = before?.cycleSetAsideCents ?? 0;
-  final ahead = before != null && before.isActive
+  final aheadBefore = before != null && before.isActive
       ? before.dailySetAsideCents * daysLeft
       : 0;
-  final past = math.max(0, held - ahead);
-  final next =
-      past + (after.isActive ? after.dailySetAsideCents * daysLeft : 0);
-  return math.min(next, after.remainingCents);
+  final aheadAfter = after.isActive ? after.dailySetAsideCents * daysLeft : 0;
+  return (held + aheadAfter - aheadBefore).clamp(0, after.remainingCents);
 }
 
 @immutable

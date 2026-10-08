@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/date_format.dart';
@@ -36,23 +38,34 @@ class _VaultScreenState extends State<VaultScreen> {
     final income = store.weeklyIncomeCents;
     final hasIncome = income.any((w) => w > 0);
 
-    // A first steady pay to start from: the average week of the last 8,
-    // rounded down to a whole 10, or the lowest step without history.
-    void setUp() {
-      final average = income.fold(0, (a, b) => a + b) ~/ income.length;
-      store.updateVault(
-        vault.copyWith(
-          steadyPayWeeklyCents: (average ~/ 1000 * 1000).clamp(30000, 150000),
-        ),
+    // The average week of the last 8, rounded down to a whole 10: a
+    // starting point when setting steady pay for the first time.
+    final average = income.fold(0, (a, b) => a + b) ~/ income.length;
+    final suggestion = average ~/ 1000 * 1000;
+
+    Future<void> type() async {
+      final cents = await showAmountSheet(
+        context,
+        title: 'Steady pay',
+        intro:
+            "What you'd be happy to live on in a slow week. Every Monday "
+            'this much moves from the Vault into your daily number.',
+        label: 'Each week',
+        hint: '${symbol}0',
+        note: hasIncome
+            ? 'Your average week, last 8 weeks: ${whole(average)}. '
+                  'A bit below that builds a buffer.'
+            : null,
+        confirmLabel: 'Save steady pay',
+        initialCents: active ? steady : (suggestion > 0 ? suggestion : null),
       );
-      // Show + / − straight away to fine-tune it.
-      setState(() => _editing = true);
+      if (cents == null) return;
+      store.updateVault(vault.copyWith(steadyPayWeeklyCents: cents));
     }
 
+    // + / − in steps of 20, never below one step.
     void adjust(int delta) => store.updateVault(
-      vault.copyWith(
-        steadyPayWeeklyCents: (steady + delta).clamp(30000, 150000),
-      ),
+      vault.copyWith(steadyPayWeeklyCents: math.max(2000, steady + delta)),
     );
 
     return TabBody(
@@ -273,6 +286,7 @@ class _VaultScreenState extends State<VaultScreen> {
                             color: c.muted,
                           ),
                         ),
+                        LinkText('Type an amount', onTap: type),
                       ],
                     ),
                   ),
@@ -300,9 +314,7 @@ class _VaultScreenState extends State<VaultScreen> {
               ? 'Done'
               : 'Adjust steady pay',
           kind: ButtonKind.secondary,
-          onPressed: active
-              ? () => setState(() => _editing = !_editing)
-              : setUp,
+          onPressed: active ? () => setState(() => _editing = !_editing) : type,
         ),
       ],
     );

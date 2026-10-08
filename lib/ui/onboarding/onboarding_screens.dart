@@ -489,7 +489,9 @@ class _OnbMoneyScreenState extends State<OnbMoneyScreen> {
         input.moneyAtStartOfDayCents +
         input.incomeTodayCents -
         input.spentTodayCents;
-    _balance = TextEditingController(text: now > 0 ? centsToField(now) : '');
+    _balance = TextEditingController(
+      text: now > 0 ? centsToField(now, symbol: MoneySymbol.read(context)) : '',
+    );
     _payday = store.nextPayday.isAfter(store.today)
         ? store.nextPayday
         : store.today.addDays(14);

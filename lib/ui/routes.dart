@@ -97,9 +97,12 @@ class BillPrefill {
 
 /// Prefill for New goal (from "Save for it").
 class GoalNewArgs {
-  const GoalNewArgs({this.name, this.targetCents});
+  const GoalNewArgs({this.name, this.targetCents, this.goalId});
   final String? name;
   final int? targetCents;
+
+  /// Edit this goal instead of starting a new one.
+  final String? goalId;
 }
 
 /// Opens a reminder's link: a route name, or "route#argument" for screens

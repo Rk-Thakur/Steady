@@ -7,6 +7,7 @@ import '../../core/date_format.dart';
 import '../../core/money.dart';
 import '../../data/budget_store.dart';
 import '../../data/store_scope.dart';
+import '../../domain/cycle.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
@@ -218,15 +219,30 @@ class GoalNewScreen extends StatefulWidget {
 }
 
 class _GoalNewScreenState extends State<GoalNewScreen> {
-  late final _name = TextEditingController(text: widget.args.name ?? '');
-  late final _target = TextEditingController(
-    text: widget.args.targetCents == null
-        ? ''
-        : centsToField(widget.args.targetCents!),
+  /// Editing this goal (G2 in edit mode); null for a new one.
+  late final Goal? _editing = widget.args.goalId == null
+      ? null
+      : StoreScope.read(context).goalById(widget.args.goalId!);
+
+  late final _name = TextEditingController(
+    text: _editing?.name ?? widget.args.name ?? '',
   );
-  final _saved = TextEditingController();
-  GoalKind _kind = GoalKind.thing;
-  int _months = 5;
+  late final _target = TextEditingController(
+    text: switch (_editing?.targetCents ?? widget.args.targetCents) {
+      null => '',
+      final cents => centsToField(cents, symbol: MoneySymbol.read(context)),
+    },
+  );
+  late final _saved = TextEditingController(
+    text: _editing == null || _editing.savedCents == 0
+        ? ''
+        : centsToField(_editing.savedCents, symbol: MoneySymbol.read(context)),
+  );
+  late GoalKind _kind = _editing?.kind ?? GoalKind.thing;
+
+  /// Months to reach the target. 0 when editing: keep the current pace.
+  late int _months = _editing == null ? 5 : _keepPace;
+  static const _keepPace = 0;
 
   @override
   void dispose() {
@@ -245,45 +261,113 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
     final saved = math.max(0, parseCents(_saved.text) ?? 0);
     final remaining = target == null ? 0 : target - saved;
     final alreadyThere = target != null && target > 0 && remaining <= 0;
+    final editing = _editing;
     final perDay = target == null || target <= 0 || alreadyThere
         ? null
+        : _months == _keepPace
+        ? editing!.dailySetAsideCents
         : (remaining + _months * 30 - 1) ~/ (_months * 30);
-    final number = store.dailyNumber;
-    final allowance = number.dailyAllowanceCents;
-    // Held back from today to payday, like the store will (never more
-    // than the goal needs).
-    final after = perDay == null
-        ? allowance
-        : floorDiv(
-            number.poolCents - math.min(perDay * number.daysLeft, remaining),
-            number.daysLeft,
-          );
     final name = _name.text.trim();
     String m(int cents) => formatMoney(cents, symbol: symbol);
+
+    // The goal as it would be saved (reached goals keep their old pace).
+    final candidate = target == null || target <= 0
+        ? null
+        : Goal(
+            id: editing?.id ?? 'preview',
+            name: name.isEmpty ? _kind.label : name,
+            kind: _kind,
+            targetCents: target,
+            savedCents: saved,
+            dailySetAsideCents: perDay ?? editing?.dailySetAsideCents ?? 0,
+            targetDate: _months == _keepPace
+                ? editing?.targetDate
+                : store.today.addDays(_months * 30),
+            paused: editing?.paused ?? false,
+            createdOn: editing?.createdOn ?? store.today,
+            cycleSetAsideCents: editing?.cycleSetAsideCents,
+          );
+    final number = store.dailyNumber;
+    final allowance = number.dailyAllowanceCents;
+    // What it holds back from today to payday changes by this much, like
+    // the store will work it out (never more than the goal needs).
+    final heldChange = candidate == null
+        ? 0
+        : cycleSetAsideAfterChange(
+                before: editing,
+                after: candidate,
+                daysLeft: number.daysLeft,
+              ) -
+              (editing?.cycleSetAsideCents ?? 0);
+    final after = floorDiv(number.poolCents - heldChange, number.daysLeft);
 
     void start() {
       store.addGoal(
         Goal(
           id: store.newId('goal'),
-          name: name.isEmpty ? _kind.label : name,
+          name: candidate!.name,
           kind: _kind,
           targetCents: target!,
           savedCents: saved,
           dailySetAsideCents: perDay!,
-          targetDate: store.today.addDays(_months * 30),
+          targetDate: candidate.targetDate,
           createdOn: store.today,
         ),
       );
       Navigator.of(context).pop();
     }
 
+    void saveChanges() {
+      store.updateGoal(candidate!);
+      Navigator.of(context).pop();
+    }
+
+    Future<void> delete() async {
+      final g = editing!;
+      final held = g.cycleSetAsideCents ?? 0;
+      final ok = await confirmSheet(
+        context,
+        title: 'Delete ${g.name}?',
+        body: [
+          if (held > 0)
+            'The ${m(held)} it was holding back this pay cycle goes back '
+                'into your daily number.',
+          if (g.savedCents > 0)
+            "Its ${m(g.savedCents)} saved was only counted in Steady, so no "
+                "real money moves: it's wherever you keep it.",
+          "This can't be undone.",
+        ].join(' '),
+        confirmLabel: 'Delete goal',
+      );
+      if (!ok || !context.mounted) return;
+      store.removeGoal(g.id);
+      // Back past this goal's screens to the goals list.
+      Navigator.of(context).popUntil(
+        (r) =>
+            r.settings.name != Routes.goalNew &&
+            r.settings.name != Routes.goalDetail,
+      );
+    }
+
+    if (widget.args.goalId != null && editing == null) {
+      return const SteadyPage(
+        title: 'Edit goal',
+        children: [Text('This goal no longer exists.')],
+      );
+    }
+
     return SteadyPage(
-      title: 'New goal',
+      title: editing == null ? 'New goal' : 'Edit goal',
       gap: 18,
-      bottom: SteadyButton(
-        'Start this goal',
-        onPressed: perDay == null ? null : start,
-      ),
+      bottom: editing == null
+          ? SteadyButton(
+              'Start this goal',
+              onPressed: perDay == null ? null : start,
+            )
+          : SteadyButton(
+              'Save changes',
+              onPressed: candidate == null ? null : saveChanges,
+            ),
       children: [
         ChipGroup<GoalKind>(
           label: 'What kind?',
@@ -323,7 +407,9 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SteadyField(
-              label: 'Already saved (optional)',
+              label: editing == null
+                  ? 'Already saved (optional)'
+                  : 'Saved so far',
               controller: _saved,
               hint: '${symbol}0',
               keyboardType: const TextInputType.numberWithOptions(
@@ -334,9 +420,16 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
             const SizedBox(height: SteadySpace.s2),
             Text(
               alreadyThere
-                  ? "That's already the whole target. Nothing more to set aside."
-                  : "Money you've already put away for this, like in a savings "
-                        "account. It isn't taken from your daily number.",
+                  ? editing == null
+                        ? "That's already the whole target. Nothing more to "
+                              'set aside.'
+                        : "That's the whole target: saving marks this goal "
+                              'reached.'
+                  : editing == null
+                  ? "Money you've already put away for this, like in a savings "
+                        "account. It isn't taken from your daily number."
+                  : 'Correct it if it\'s off. Changing it here doesn\'t move '
+                        'any money.',
               style: SteadyType.caption.copyWith(
                 fontWeight: FontWeight.w500,
                 color: alreadyThere
@@ -349,9 +442,11 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
         ChipGroup<int>(
           label: 'How fast?',
           height: 44,
-          options: const [3, 5, 8, 12],
+          options: [if (editing != null) _keepPace, 3, 5, 8, 12],
           selected: _months,
-          labelOf: (n) => '$n months',
+          labelOf: (n) => n == _keepPace
+              ? 'Keep ${m(editing!.dailySetAsideCents)}/day'
+              : '$n months',
           onSelected: (n) => setState(() => _months = n),
         ),
         Panel(
@@ -382,7 +477,7 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
                 ValueRow(
                   padding: EdgeInsets.zero,
                   label: 'Your daily number',
-                  value: perDay == null
+                  value: after == allowance
                       ? m(allowance)
                       : '${m(allowance)} → ${m(after)}',
                 ),
@@ -390,7 +485,7 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
             ),
           ),
         ),
-        if (perDay != null)
+        if (perDay != null && editing == null)
           Text(
             'Starts today. It comes out of your daily number until payday '
             '(${formatShortDay(store.nextPayday)}), then moves into the goal. '
@@ -400,6 +495,8 @@ class _GoalNewScreenState extends State<GoalNewScreen> {
               color: context.colors.muted,
             ),
           ),
+        if (editing != null)
+          Center(child: LinkText('Delete goal', onTap: delete)),
       ],
     );
   }
@@ -449,6 +546,11 @@ class GoalDetailScreen extends StatelessWidget {
 
     return SteadyPage(
       title: g.name,
+      trailing: LinkText(
+        'Edit',
+        onTap: () => Navigator.of(context)
+            .pushNamed(Routes.goalNew, arguments: GoalNewArgs(goalId: g.id)),
+      ),
       bottom: ButtonRow(
         children: [
           SteadyButton(
@@ -580,55 +682,17 @@ class GoalDetailScreen extends StatelessWidget {
     );
   }
 
-  static Future<int?> _askAmount(BuildContext context, String symbol) {
-    final controller = TextEditingController();
-    return showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          SteadySpace.s5,
-          0,
-          SteadySpace.s5,
-          MediaQuery.viewInsetsOf(context).bottom + SteadySpace.s6,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Add money', style: SteadyType.title.copyWith(fontSize: 24)),
-            const SizedBox(height: SteadySpace.s4),
-            SteadyField(
-              label: 'Amount',
-              amount: true,
-              controller: controller,
-              hint: '${symbol}0.00',
-              autofocus: true,
-            ),
-            const SizedBox(height: SteadySpace.s2),
-            Text(
-              "Money you've put away yourself, like in a savings account. "
-              "It isn't taken from your daily number.",
-              style: SteadyType.caption.copyWith(
-                fontWeight: FontWeight.w500,
-                color: context.colors.muted,
-              ),
-            ),
-            const SizedBox(height: SteadySpace.s4),
-            SteadyButton(
-              'Add to goal',
-              onPressed: () {
-                final cents = parseCents(controller.text);
-                if (cents != null && cents > 0) {
-                  Navigator.of(context).pop(cents);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    ).whenComplete(controller.dispose);
-  }
+  static Future<int?> _askAmount(BuildContext context, String symbol) =>
+      showAmountSheet(
+        context,
+        title: 'Add money',
+        label: 'Amount',
+        hint: '${symbol}0.00',
+        note:
+            "Money you've put away yourself, like in a savings account. "
+            "It isn't taken from your daily number.",
+        confirmLabel: 'Add to goal',
+      );
 }
 
 /// Progress with 25 / 50 / 75 % milestone ticks (dark once passed).

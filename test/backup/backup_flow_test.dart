@@ -48,11 +48,18 @@ void main() {
     return store;
   }
 
-  /// Lets the encryption isolate finish (real time), then redraws.
-  Future<void> letCryptoRun(WidgetTester tester) async {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(seconds: 2)),
-    );
+  /// Lets the encryption isolate (real time) run until [until] shows, up to
+  /// 20 seconds, so a busy machine doesn't fail the test.
+  Future<void> letCryptoRun(WidgetTester tester, Finder until) async {
+    for (var i = 0; i < 100; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      // One frame at a time: a progress spinner is on screen meanwhile, so
+      // pumpAndSettle would grind through its 10-minute limit.
+      await tester.pump();
+      if (until.evaluate().isNotEmpty) break;
+    }
     await tester.pumpAndSettle();
   }
 
@@ -70,7 +77,10 @@ void main() {
     await tester.enterText(fields.at(1), 'correct horse');
     await tester.pump();
     await tester.tap(find.text('Create backup file').last);
-    await letCryptoRun(tester);
+    await letCryptoRun(
+      tester,
+      find.textContaining('Last backup file', skipOffstage: false),
+    );
 
     expect(io.saved.keys, ['steady-backup-2026-10-02.steady']);
     expect(store.settings.lastBackupOn, oct2);
@@ -104,7 +114,12 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'wrong password');
     await tester.pump();
     await tester.tap(find.text('Unlock'));
-    await letCryptoRun(tester);
+    await letCryptoRun(
+      tester,
+      find.text(
+        "That password doesn't open this file. Check it and try again.",
+      ),
+    );
     expect(
       find.text(
         "That password doesn't open this file. Check it and try again.",
@@ -115,13 +130,16 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'correct horse');
     await tester.pump();
     await tester.tap(find.text('Unlock'));
-    await letCryptoRun(tester);
+    await letCryptoRun(tester, find.textContaining('Backup from'));
 
     // The preview names the backup's real creation date and what's in it.
     expect(find.textContaining('Backup from'), findsOneWidget);
     expect(find.textContaining('9 bills, 3 goals'), findsOneWidget);
     await tester.tap(find.text('Replace everything'));
-    await letCryptoRun(tester);
+    await letCryptoRun(
+      tester,
+      find.text('Backup restored. Your daily number is up to date.'),
+    );
 
     expect(store.entries.any((e) => e.id == 'after'), isFalse);
     expect(store.dailyNumber.safeToSpendCents, 4620);
@@ -168,7 +186,11 @@ void main() {
     await tester.ensureVisible(find.text('Export monthly report (PDF)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Export monthly report (PDF)'));
-    await letCryptoRun(tester); // font loading and PDF building are async
+    // Font loading and PDF building are async.
+    await letCryptoRun(
+      tester,
+      find.textContaining('Saved steady-month-', skipOffstage: false),
+    );
     final name = io.saved.keys.single;
     expect(name, startsWith('steady-month-2026-'));
     expect(String.fromCharCodes(io.saved[name]!.take(5)), '%PDF-');
@@ -188,7 +210,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save as PDF'));
-    await letCryptoRun(tester);
+    await letCryptoRun(
+      tester,
+      find.textContaining('Saved steady-week-', skipOffstage: false),
+    );
     final name = io.saved.keys.single;
     expect(name, startsWith('steady-week-'));
     expect(find.text('Saved $name.', skipOffstage: false), findsOneWidget);

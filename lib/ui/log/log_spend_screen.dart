@@ -24,7 +24,10 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
   late final _amount = TextEditingController(
     text: widget.args.amountCents == null
         ? ''
-        : centsToField(widget.args.amountCents!),
+        : centsToField(
+            widget.args.amountCents!,
+            symbol: MoneySymbol.read(context),
+          ),
   );
   late final _where = TextEditingController(text: widget.args.merchant ?? '');
   String? _categoryId = 'food';

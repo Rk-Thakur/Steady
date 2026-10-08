@@ -330,6 +330,34 @@ void main() {
       );
     });
 
+    test('a slower pace always holds less, even when under-held', () {
+      // Holds $60 this cycle though $10/day × 10 days would be $100 (a share
+      // scaled down when per-goal amounts started being tracked).
+      final held = fund.copyWith(cycleSetAsideCents: 6000);
+      final slower = held.copyWith(dailySetAsideCents: 800);
+      expect(
+        cycleSetAsideAfterChange(before: held, after: slower, daysLeft: 10),
+        4000, // $2/day less for 10 days
+      );
+      final faster = held.copyWith(dailySetAsideCents: 1500);
+      expect(
+        cycleSetAsideAfterChange(before: held, after: faster, daysLeft: 10),
+        11000,
+      );
+    });
+
+    test('a lower target caps what is held', () {
+      final held = fund.copyWith(savedCents: 10000, cycleSetAsideCents: 9000);
+      expect(
+        cycleSetAsideAfterChange(
+          before: held,
+          after: held.copyWith(targetCents: 15000),
+          daysLeft: 5,
+        ),
+        5000, // only $50 still needed
+      );
+    });
+
     test('topping up to the target releases the rest', () {
       final held = fund.copyWith(savedCents: 290000, cycleSetAsideCents: 10000);
       expect(

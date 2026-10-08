@@ -69,6 +69,10 @@ class Goal {
   }
 
   Goal copyWith({
+    String? name,
+    GoalKind? kind,
+    int? targetCents,
+    LocalDate? targetDate,
     int? savedCents,
     bool? paused,
     int? dailySetAsideCents,
@@ -76,12 +80,12 @@ class Goal {
   }) {
     return Goal(
       id: id,
-      name: name,
-      kind: kind,
-      targetCents: targetCents,
+      name: name ?? this.name,
+      kind: kind ?? this.kind,
+      targetCents: targetCents ?? this.targetCents,
       savedCents: savedCents ?? this.savedCents,
       dailySetAsideCents: dailySetAsideCents ?? this.dailySetAsideCents,
-      targetDate: targetDate,
+      targetDate: targetDate ?? this.targetDate,
       paused: paused ?? this.paused,
       createdOn: createdOn,
       cycleSetAsideCents: cycleSetAsideCents ?? this.cycleSetAsideCents,

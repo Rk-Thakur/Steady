@@ -781,6 +781,15 @@ class BudgetStore extends ChangeNotifier {
     _save((r) => r.upsertGoal(goal, sortOrder: i));
   }
 
+  /// Deleting a goal releases what it held back this cycle into the daily
+  /// number. What it saved was only counted in Steady, so no money is lost.
+  void removeGoal(String id) {
+    _goals.removeWhere((g) => g.id == id);
+    _syncGoalPlan();
+    notifyListeners();
+    _save((r) => r.deleteGoal(id));
+  }
+
   /// The cycle's goal total is the sum of what each goal holds back.
   void _syncGoalPlan() {
     final total = _goals.fold(0, (sum, g) => sum + (g.cycleSetAsideCents ?? 0));
