@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/notification_inbox.dart';
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
 import '../../core/money.dart';
@@ -9,13 +10,14 @@ import '../../domain/models/models.dart';
 import '../../domain/number_change.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
+import '../widgets/entry_tile.dart';
 import '../widgets/kit.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/steady_card.dart';
 import '../history/history_screen.dart';
 import '../shell/home_shell.dart';
 import 'bills_card.dart';
 import 'cycle_summary_sheet.dart';
-import 'entry_row.dart';
 import 'hero_card.dart';
 import 'number_change_text.dart';
 import 'today_states.dart';
@@ -43,6 +45,13 @@ class TodayScreen extends StatelessWidget {
     final symbol = store.symbol;
     final entries = store.todayEntries;
     final c = context.colors;
+    // Pull down: catch up on the date, recalculate, re-read arrived
+    // reminders.
+    Future<void> refresh() async {
+      store.onClockTick();
+      await NotificationInbox.instance.refresh();
+    }
+
     final change = store.numberChange;
     final balances = store.splitBalances;
     final owedToYou = balances.fold(0, (sum, b) => sum + b.owesYou);
@@ -70,9 +79,13 @@ class TodayScreen extends StatelessWidget {
     if (number.isOverspent && store.overspendHandledOn(store.today) == null) {
       return TabBody(
         gap: SteadySpace.sectionGap,
+        onRefresh: refresh,
         children: [
           const TodayHeader(),
           HeroCard(
+            // Same key in both layouts: the hero stays one widget when a
+            // spend tips into overspent, so it can react (shake).
+            key: const ValueKey('today-hero'),
             number: number,
             payday: store.nextPayday,
             symbol: symbol,
@@ -85,6 +98,7 @@ class TodayScreen extends StatelessWidget {
 
     return TabBody(
       gap: SteadySpace.sectionGap,
+      onRefresh: refresh,
       children: [
         const TodayHeader(),
         if (store.newCycleStartedOn != null)
@@ -106,6 +120,9 @@ class TodayScreen extends StatelessWidget {
         if (store.missedDays.isNotEmpty)
           _EstimateBanner(missed: store.missedDays),
         HeroCard(
+          // Same key in both layouts: the hero stays one widget when a
+          // spend tips into overspent, so it can react (shake).
+          key: const ValueKey('today-hero'),
           number: number,
           payday: store.nextPayday,
           symbol: symbol,
@@ -160,27 +177,24 @@ class TodayScreen extends StatelessWidget {
               onAction: () => Navigator.of(context).pushNamed(Routes.history),
             ),
             if (entries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: SteadySpace.s3),
-                child: Text(
-                  'Nothing logged today. Tap + when you spend.',
-                  style: SteadyType.body.copyWith(color: c.muted),
-                ),
+              const EmptyState(
+                compact: true,
+                icon: Icons.edit_note_rounded,
+                title: 'Nothing logged today',
+                body: 'Tap + when you spend. Each one keeps your number right.',
               )
             else
-              for (final e in entries)
+              for (final (i, e) in entries.indexed)
                 SwipeToDelete(
                   entry: e,
                   aboveTabBar: true,
-                  child: InkWell(
+                  child: EntryTile(
+                    key: ValueKey(e.id),
+                    entry: e,
+                    index: i,
                     onTap: () =>
                         Navigator.of(context)
                             .pushNamed(Routes.editEntry, arguments: e.id),
-                    child: EntryRow(
-                      entry: e,
-                      category: store.categoryById(e.categoryId),
-                      symbol: symbol,
-                    ),
                   ),
                 ),
           ],
@@ -198,6 +212,12 @@ class TodayScreen extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      // A softer, springier rise than the default sheet.
+      sheetAnimationStyle: AnimationStyle(
+        duration: SteadyMotion.sheet + const Duration(milliseconds: 80),
+        reverseDuration: const Duration(milliseconds: 220),
+        curve: SteadyMotion.sheetCurve,
+      ),
       builder: (context) =>
           _BreakdownSheet(number: n, change: change, symbol: symbol),
     );
@@ -235,12 +255,45 @@ class TodayHeader extends StatelessWidget {
             ],
           ),
         ),
-        _CircleButton(
-          label: 'Notifications',
-          background: c.surface,
-          border: c.line,
-          onTap: () => Navigator.of(context).pushNamed(Routes.notifications),
-          child: Icon(Icons.notifications_none_rounded, size: 20, color: c.ink),
+        ValueListenableBuilder(
+          valueListenable: NotificationInbox.instance,
+          builder: (context, unread, _) => Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _CircleButton(
+                label: unread.isEmpty
+                    ? 'Notifications'
+                    : 'Notifications, ${unread.length} new',
+                background: c.surface,
+                border: c.line,
+                onTap: () =>
+                    Navigator.of(context).pushNamed(Routes.notifications),
+                child: Icon(
+                  Icons.notifications_none_rounded,
+                  size: 20,
+                  color: c.ink,
+                ),
+              ),
+              // Red dot: a reminder arrived that hasn't been seen yet.
+              if (unread.isNotEmpty)
+                Positioned(
+                  top: 1,
+                  right: 1,
+                  child: IgnorePointer(
+                    child: Container(
+                      key: const ValueKey('unread-dot'),
+                      width: 11,
+                      height: 11,
+                      decoration: BoxDecoration(
+                        color: c.dangerFg,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: c.surface, width: 2),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(width: SteadySpace.s2),
         _CircleButton(

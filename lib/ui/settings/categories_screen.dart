@@ -6,6 +6,8 @@ import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
+import '../bills/bill_tile.dart';
+import 'category_edit_screen.dart';
 import '../widgets/tones.dart';
 
 /// P3 Categories & bills.
@@ -73,37 +75,69 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             padding: const EdgeInsets.only(left: 14, right: SteadySpace.s2),
             children: [
               for (final cat in store.categories)
-                Row(
-                  children: [
-                    LetterTile(
-                      letter: cat.name,
-                      tone: toneOf(cat.tone),
-                      size: 32,
-                      radius: 10,
-                    ),
-                    const SizedBox(width: SteadySpace.s3),
-                    Expanded(
-                      child: Text(
-                        cat.name,
-                        style: SteadyType.body.copyWith(
-                          fontWeight: FontWeight.w700,
+                // Tap to edit; long-press to delete (with Undo).
+                Semantics(
+                  onLongPressHint: 'Delete category',
+                  child: InkWell(
+                    onTap: () =>
+                        Navigator.of(context)
+                            .pushNamed(Routes.categoryEdit, arguments: cat.id),
+                    onLongPress: () => deleteCategoryFlow(context, cat),
+                    child: Row(
+                      children: [
+                        LetterTile(
+                          letter: cat.name,
+                          tone: toneOf(cat.tone),
+                          size: 32,
+                          radius: 10,
                         ),
-                      ),
+                        const SizedBox(width: SteadySpace.s3),
+                        // The limit under the name: fits small phones and
+                        // large text ("$64 left of $420" is long).
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: SteadySpace.s2,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  cat.name,
+                                  style: SteadyType.body.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.3,
+                                  ),
+                                ),
+                                Text(
+                                  _limitLabel(
+                                    store.leftThisMonth(cat),
+                                    cat,
+                                    symbol,
+                                  ),
+                                  style: SteadyType.caption.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    color: c.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Edit ${cat.name}',
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            size: 20,
+                            color: c.muted,
+                          ),
+                          onPressed: () => Navigator.of(
+                            context,
+                          ).pushNamed(Routes.categoryEdit, arguments: cat.id),
+                        ),
+                      ],
                     ),
-                    Text(
-                      _limitLabel(store.leftThisMonth(cat), cat, symbol),
-                      style: SteadyType.caption.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: c.muted,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Edit ${cat.name}',
-                      icon: Icon(Icons.edit_outlined, size: 20, color: c.muted),
-                      onPressed: () => Navigator.of(context)
-                          .pushNamed(Routes.categoryEdit, arguments: cat.id),
-                    ),
-                  ],
+                  ),
                 ),
               addRow(
                 '+ New category',
@@ -115,50 +149,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           const Overline('Recurring bills'),
           GroupedList(
             children: [
-              for (final b in bills)
-                InkWell(
+              for (final (i, b) in bills.indexed)
+                BillTile(
+                  key: ValueKey(b.id),
+                  bill: b,
+                  amountCents: b.amountCents,
+                  today: store.today,
+                  meta: recurrence(b),
+                  symbol: symbol,
+                  index: i,
                   onTap: () =>
                       Navigator.of(context)
                           .pushNamed(Routes.billEdit, arguments: b.id),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 52),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: SteadySpace.s2,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  b.name,
-                                  style: SteadyType.body.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.3,
-                                  ),
-                                ),
-                                Text(
-                                  '${recurrence(b)}${b.isEstimate ? ' · estimate' : ''}',
-                                  style: SteadyType.caption.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                    color: c.muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${b.isEstimate ? '~' : ''}${formatMoney(b.amountCents, symbol: symbol)}',
-                          style: SteadyType.body.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               addRow(
                 '+ Add a bill',

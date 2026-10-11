@@ -5,6 +5,7 @@ import '../../core/date_format.dart';
 import '../../core/money.dart';
 import '../../data/store_scope.dart';
 import '../../domain/models/models.dart';
+import '../../domain/reminders.dart';
 import '../../theme/tokens.dart';
 import '../widgets/kit.dart';
 
@@ -24,6 +25,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
   /// Null until asked; false shows how to turn notifications back on.
   bool? _allowed;
 
+  /// False on Android without "Alarms & reminders": up to an hour late.
+  bool? _onTime;
+
   /// Back from the phone's Settings app: notifications may be on now.
   late final _lifecycle = AppLifecycleListener(onResume: _recheck);
 
@@ -33,6 +37,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
     _lifecycle; // start listening
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (StoreScope.read(context).settings.reminders.anyOn) _askPermission();
+      _checkOnTime();
     });
   }
 
@@ -46,6 +51,13 @@ class _RemindersScreenState extends State<RemindersScreen> {
     if (!Notifications.instance.enabled) return;
     final allowed = await Notifications.instance.permissionGranted();
     if (mounted) setState(() => _allowed = allowed);
+    await _checkOnTime();
+  }
+
+  Future<void> _checkOnTime() async {
+    if (!Notifications.instance.enabled) return;
+    final onTime = await Notifications.instance.onTime();
+    if (mounted) setState(() => _onTime = onTime);
   }
 
   Future<void> _askPermission() async {
@@ -122,6 +134,24 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   : 'To get these reminders, open Settings › Apps › Steady › '
                         'Notifications and turn them on.',
               leadColor: c.warningFg,
+            ),
+          )
+        else if (_onTime == false && r.anyOn)
+          SoftBanner(
+            tone: BannerTone.warning,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LeadText(
+                  lead: 'Reminders may arrive up to an hour late.',
+                  body:
+                      'Android holds them back unless Steady may set alarms. '
+                      'Allow "Alarms & reminders" for Steady to get them on '
+                      'time.',
+                  leadColor: c.warningFg,
+                ),
+                LinkText('Allow', onTap: Notifications.instance.askForOnTime),
+              ],
             ),
           )
         else
@@ -210,7 +240,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
             row(
               SwitchRow(
                 title: 'Weekly & monthly recap',
-                subtitle: 'Sunday evening, and the 1st of each month',
+                subtitle:
+                    '${weekdayName(lastDayOfWeek(store.settings.weekStartsOn))} '
+                    'evening (end of your week), and the 1st of each month',
                 value: r.recaps,
                 onChanged: (v) => _update((r) => r.copyWith(recaps: v)),
               ),

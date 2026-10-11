@@ -5,6 +5,49 @@ import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../widgets/kit.dart';
 
+/// Delete [category] after asking, then offer Undo. Used by the editor's
+/// Delete, and by long-pressing a category (Log spend chips, Settings list).
+/// True if it was deleted.
+///
+/// [undo] off on forms with a button at the bottom (Log spend): the Undo
+/// bar would sit over Save for 5 seconds. Asking first guards those.
+Future<bool> deleteCategoryFlow(
+  BuildContext context,
+  BudgetCategory category, {
+  bool undo = true,
+}) async {
+  final store = StoreScope.read(context);
+  final count = store.entries.where((e) => e.categoryId == category.id).length;
+  final ok = await confirmSheet(
+    context,
+    title: 'Delete ${category.name}?',
+    body: count == 0
+        ? 'Nothing is logged in it yet.'
+        : '${count == 1 ? '1 entry' : '$count entries'} in it keep '
+              '${count == 1 ? 'its amount' : 'their amounts'} but lose the '
+              'category. Your daily number doesn\'t change.',
+    confirmLabel: 'Delete category',
+  );
+  if (!ok || !context.mounted) return false;
+  final at = store.categories.indexWhere((c) => c.id == category.id);
+  store.removeCategory(category.id);
+  if (!undo) return true;
+  ScaffoldMessenger.maybeOf(context)
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text('${category.name} deleted.'),
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor: context.colors.highlight,
+          onPressed: () => store.restoreCategory(category, at),
+        ),
+      ),
+    );
+  return true;
+}
+
 /// N4 Edit category (or New category when [categoryId] is null).
 class CategoryEditScreen extends StatefulWidget {
   const CategoryEditScreen({super.key, this.categoryId});
@@ -65,9 +108,10 @@ class _CategoryEditScreenState extends State<CategoryEditScreen> {
 
     void save() {
       final limit = parseCents(_limit.text);
+      final id = _existing?.id ?? store.newId('cat');
       store.upsertCategory(
         BudgetCategory(
-          id: _existing?.id ?? store.newId('cat'),
+          id: id,
           name: name,
           tone: _tone,
           monthlyLimitCents: _limitOn && limit != null && limit > 0
@@ -75,19 +119,13 @@ class _CategoryEditScreenState extends State<CategoryEditScreen> {
               : null,
         ),
       );
-      Navigator.of(context).pop();
+      // The id goes back to whoever opened this ("+ New" selects it).
+      Navigator.of(context).pop(id);
     }
 
     Future<void> delete() async {
-      final ok = await confirmSheet(
-        context,
-        title: 'Delete ${_existing!.name}?',
-        body: 'Entries in this category keep their amounts but lose the category.',
-        confirmLabel: 'Delete category',
-      );
-      if (!ok || !context.mounted) return;
-      store.removeCategory(_existing!.id);
-      Navigator.of(context).pop();
+      final deleted = await deleteCategoryFlow(context, _existing!);
+      if (deleted && context.mounted) Navigator.of(context).pop();
     }
 
     return SteadyPage(

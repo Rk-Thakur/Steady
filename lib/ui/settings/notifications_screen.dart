@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/notification_inbox.dart';
+import '../../app/notifications.dart';
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
 import '../../data/store_scope.dart';
@@ -8,13 +10,34 @@ import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../shell/home_shell.dart';
 import '../widgets/kit.dart';
+import '../widgets/empty_state.dart';
 
-/// N1 Notifications: what Steady will remind you about next, planned on
-/// this phone from your bills, payday and Reminders settings.
-class NotificationsScreen extends StatelessWidget {
+/// N1 Notifications: reminders that just arrived ("New"), then what Steady
+/// will remind you about next, planned on this phone from your bills,
+/// payday and Reminders settings.
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
   static const _shown = 12;
+
+  /// What was new when the screen opened. It stays listed here while the
+  /// screen is open, though opening it marks it read (the bell's dot goes).
+  List<DeliveredNotification> _new = NotificationInbox.instance.value;
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationInbox.instance.refresh().then((_) {
+      if (!mounted) return;
+      setState(() => _new = NotificationInbox.instance.value);
+      NotificationInbox.instance.markRead();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,20 +58,44 @@ class NotificationsScreen extends StatelessWidget {
 
     return SteadyPage(
       title: 'Notifications',
-      subtitle: 'Coming up',
+      // With new ones listed, "Coming up" heads its own section instead.
+      subtitle: _new.isEmpty ? 'Coming up' : null,
       gap: 14,
       trailing: LinkText(
         'Settings',
         onTap: () => Navigator.of(context).pushNamed(Routes.reminders),
       ),
       children: [
-        if (byDay.isEmpty)
-          Text(
-            store.settings.reminders.anyOn
-                ? 'Nothing coming up in the next two weeks.'
-                : 'All reminders are off. Turn them on in Settings.',
-            style: SteadyType.body.copyWith(color: c.muted),
+        if (_new.isNotEmpty) ...[
+          const Overline('New'),
+          GroupedList(
+            children: [
+              for (final n in _new)
+                _Item(
+                  Icons.notifications_active_outlined,
+                  BannerTone.danger,
+                  n.title,
+                  n.body,
+                  '',
+                  n.route ?? Routes.home,
+                ),
+            ],
           ),
+          const Overline('Coming up'),
+        ],
+        if (byDay.isEmpty)
+          store.settings.reminders.anyOn
+              ? const EmptyState(
+                  icon: Icons.notifications_none_rounded,
+                  title: 'Nothing coming up',
+                  body: 'No reminders in the next two weeks.',
+                )
+              : const EmptyState(
+                  icon: Icons.notifications_off_outlined,
+                  tone: BannerTone.neutral,
+                  title: 'Reminders are off',
+                  body: 'Turn them on in Settings to get nudges here.',
+                ),
         for (final day in byDay.entries) ...[
           Overline(dayLabel(day.key)),
           GroupedList(

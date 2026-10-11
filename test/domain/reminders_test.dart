@@ -156,12 +156,31 @@ void main() {
     );
   });
 
-  test('recaps: Sunday evening and the 1st of the month', () {
+  test('recaps: the evening your week ends, and the 1st of the month', () {
+    // Weeks start Sunday by default, so they end Saturday.
     final p = plan(allOff.copyWith(recaps: true));
     expect(times(p, ReminderKind.weeklyRecap), [
-      DateTime(2026, 10, 4, 18),
-      DateTime(2026, 10, 11, 18),
+      DateTime(2026, 10, 3, 18),
+      DateTime(2026, 10, 10, 18),
     ]);
+    List<DateTime> recapsFor(int weekStartsOn) => times(
+      planNotifications(
+        now: now,
+        settings: AppSettings(
+          currency: Currency.usd,
+          payFrequency: PayFrequency.monthly,
+          nextPayday: const LocalDate(2026, 10, 15),
+          reminders: allOff.copyWith(recaps: true),
+          weekStartsOn: weekStartsOn,
+        ),
+        bills: const [],
+        loggedToday: false,
+      ),
+      ReminderKind.weeklyRecap,
+    ).toList();
+    // Monday start → Sunday; Wednesday start → Tuesday.
+    expect(recapsFor(DateTime.monday).first, DateTime(2026, 10, 4, 18));
+    expect(recapsFor(DateTime.wednesday).first, DateTime(2026, 10, 6, 18));
     expect(times(p, ReminderKind.monthlyRecap), isEmpty); // Nov 1 is later
     final late = planNotifications(
       now: DateTime(2026, 10, 25, 12),
@@ -266,6 +285,13 @@ void main() {
       final p = debts(on.copyWith(debtsYouOwe: true), [sam(owedToYou: false)]);
       expect(p.first.title, r'You owe Sam $30.00');
     });
+  });
+
+  test('a week ends the day before it starts', () {
+    expect(lastDayOfWeek(DateTime.monday), DateTime.sunday);
+    expect(lastDayOfWeek(DateTime.sunday), DateTime.saturday);
+    expect(lastDayOfWeek(DateTime.wednesday), DateTime.tuesday);
+    expect(lastDayOfWeek(DateTime.saturday), DateTime.friday);
   });
 
   test('routes match the app routes', () {

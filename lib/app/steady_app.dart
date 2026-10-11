@@ -15,6 +15,7 @@ import '../ui/onboarding/onboarding_screens.dart';
 import '../ui/routes.dart';
 import '../ui/shell/home_shell.dart';
 import '../ui/widgets/kit.dart';
+import 'notification_inbox.dart';
 import 'notifications.dart';
 
 class SteadyApp extends StatefulWidget {
@@ -73,6 +74,34 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
     _rescheduleSoon = Timer(const Duration(seconds: 1), _reschedule);
   }
 
+  /// Fires just after the next reminder is due, so the bell's red dot shows
+  /// while the app is open.
+  Timer? _inboxTimer;
+
+  void _watchInbox() {
+    _inboxTimer?.cancel();
+    final now = DateTime.now();
+    final next = _scheduled?.where((n) => n.at.isAfter(now)).firstOrNull;
+    if (next == null) return;
+    _inboxTimer = Timer(
+      next.at.difference(now) + const Duration(seconds: 3),
+      () => NotificationInbox.instance.refresh().then((_) => _watchInbox()),
+    );
+  }
+
+  /// Whether the current plan was scheduled on time (Android "Alarms &
+  /// reminders"). If that changes in system settings, re-plan on return.
+  bool? _onTime;
+
+  Future<void> _checkOnTime() async {
+    final now = await Notifications.instance.onTime();
+    if (_onTime != null && now != _onTime) {
+      _scheduled = null; // same plan, new timing
+      _queueReschedule();
+    }
+    _onTime = now;
+  }
+
   void _reschedule() {
     final store = widget.store;
     final plan = store.settings.onboarded
@@ -80,6 +109,7 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
         : const <PlannedNotification>[];
     if (listEquals(plan, _scheduled)) return;
     _scheduled = plan;
+    _watchInbox();
     Notifications.instance.replaceAll(plan).catchError((Object e) {
       _scheduled = null; // try again next time
       debugPrint('Steady: could not schedule reminders: $e');
@@ -87,6 +117,8 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
   }
 
   void _openFromNotification(String route) {
+    // The phone removes a tapped notification: update the bell.
+    NotificationInbox.instance.refresh();
     if (!widget.store.settings.onboarded) return;
     final nav = _navigator.currentState;
     if (nav == null || _lockShowing) {
@@ -129,6 +161,8 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
     if (notifications.enabled) {
       widget.store.addListener(_queueReschedule);
       _queueReschedule();
+      _checkOnTime();
+      NotificationInbox.instance.refresh();
       _taps = notifications.taps.listen(_openFromNotification);
       notifications.launchRoute().then((route) {
         if (route != null && mounted) _openFromNotification(route);
@@ -141,6 +175,7 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _midnight?.cancel();
     _rescheduleSoon?.cancel();
+    _inboxTimer?.cancel();
     _taps?.cancel();
     widget.store.removeListener(_queueReschedule);
     super.dispose();
@@ -166,6 +201,11 @@ class _SteadyAppState extends State<SteadyApp> with WidgetsBindingObserver {
         // The date may have changed while away; timers don't run then.
         widget.store.onClockTick();
         _scheduleMidnight();
+        if (Notifications.instance.enabled) {
+          _checkOnTime();
+          NotificationInbox.instance.refresh();
+          _watchInbox();
+        }
         setState(() => _covered = false);
       case AppLifecycleState.detached:
         break;

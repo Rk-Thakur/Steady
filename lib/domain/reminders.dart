@@ -200,8 +200,10 @@ List<PlannedNotification> planNotifications({
   }
 
   if (r.recaps) {
+    final lastDay = lastDayOfWeek(settings.weekStartsOn);
     for (var d = today; d.isBefore(horizon); d = d.addDays(1)) {
-      if (d.weekday == DateTime.sunday) {
+      // The evening the user's week ends, so the recap covers all of it.
+      if (d.weekday == lastDay) {
         add(
           ReminderKind.weeklyRecap,
           at(d, 18 * 60),
@@ -307,3 +309,7 @@ abstract final class ReminderRoutes {
   /// "route#argument": a route that needs an id (e.g. which person).
   static const argSeparator = '#';
 }
+
+/// The weekday a week ends on, given the day it starts ([DateTime.monday]
+/// … [DateTime.sunday]): the day before. Starts Monday → ends Sunday.
+int lastDayOfWeek(int weekStartsOn) => (weekStartsOn - 2) % 7 + 1;

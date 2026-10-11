@@ -12,6 +12,7 @@ import 'steady_app.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../ui/onboarding/onboarding_screens.dart';
+import '../ui/today/today_states.dart';
 import '../ui/routes.dart';
 import '../ui/settings/backup_flows.dart';
 import '../ui/widgets/kit.dart';
@@ -64,6 +65,27 @@ class _SteadyBootstrapState extends State<SteadyBootstrap> {
   static const _minSplash = Duration(milliseconds: 900);
 
   _Phase _phase = _Phase.loading;
+
+  /// Still opening well after the minimum splash: swap the logo for the
+  /// shimmering Today skeleton, so a slow phone shows the app taking shape.
+  /// Fast phones never see it.
+  bool _slow = false;
+  Timer? _slowTimer;
+
+  void _watchSlow() {
+    _slowTimer?.cancel();
+    _slow = false;
+    _slowTimer = Timer(_minSplash + const Duration(milliseconds: 300), () {
+      if (mounted && _phase == _Phase.loading) setState(() => _slow = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _slowTimer?.cancel();
+    super.dispose();
+  }
+
   BudgetStore? _store;
   Object? _error;
 
@@ -75,10 +97,12 @@ class _SteadyBootstrapState extends State<SteadyBootstrap> {
 
   Future<void> _start() async {
     setState(() => _phase = _Phase.loading);
+    _watchSlow();
     final minimum = Future<void>.delayed(_minSplash);
     try {
       final store = await widget.open();
       await minimum;
+      _slowTimer?.cancel();
       if (!mounted) return;
       setState(() {
         _store = store;
@@ -86,10 +110,12 @@ class _SteadyBootstrapState extends State<SteadyBootstrap> {
       });
     } on DatabaseKeyLostException {
       await minimum;
+      _slowTimer?.cancel();
       if (mounted) setState(() => _phase = _Phase.keyLost);
     } catch (e, st) {
       debugPrint('Steady: could not open the database: $e\n$st');
       await minimum;
+      _slowTimer?.cancel();
       if (!mounted) return;
       setState(() {
         _error = e;
@@ -129,7 +155,12 @@ class _SteadyBootstrapState extends State<SteadyBootstrap> {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       home: switch (_phase) {
-        _Phase.loading || _Phase.ready => const SplashScreen.loading(),
+        _Phase.loading || _Phase.ready => AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: _slow
+              ? const _LoadingSkeleton()
+              : const SplashScreen.loading(),
+        ),
         _Phase.keyLost => _RecoveryScreen(
           onStartOver: _startOver,
           onRestore: _restoreInto,
@@ -239,4 +270,18 @@ class _FailedScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Today, taking shape: shown while a slow phone opens the database.
+class _LoadingSkeleton extends StatelessWidget {
+  const _LoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Loading Steady',
+    child: Scaffold(
+      backgroundColor: context.colors.ground,
+      body: const TodayLoadingBody(),
+    ),
+  );
 }

@@ -22,6 +22,7 @@ class SteadyPage extends StatelessWidget {
     this.gap = SteadySpace.s4,
     this.background,
     this.header,
+    this.onRefresh,
   });
 
   final String? title;
@@ -35,6 +36,9 @@ class SteadyPage extends StatelessWidget {
   final Widget? bottom;
   final double gap;
   final Color? background;
+
+  /// Pull down to refresh, when set.
+  final RefreshCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -56,20 +60,29 @@ class SteadyPage extends StatelessWidget {
           Expanded(
             child: StatusBarScrim(
               color: background,
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  SteadySpace.screenMargin,
-                  pad.top + SteadySpace.s3,
-                  SteadySpace.screenMargin,
-                  bottom == null ? pad.bottom + SteadySpace.s6 : SteadySpace.s4,
-                ),
-                children: [
-                  if (headerRow != null) ...[
-                    headerRow,
-                    SizedBox(height: gap + 2),
+              child: _refreshable(
+                onRefresh,
+                pad.top,
+                ListView(
+                  physics: onRefresh == null
+                      ? null
+                      : const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    SteadySpace.screenMargin,
+                    pad.top + SteadySpace.s3,
+                    SteadySpace.screenMargin,
+                    bottom == null
+                        ? pad.bottom + SteadySpace.s6
+                        : SteadySpace.s4,
+                  ),
+                  children: [
+                    if (headerRow != null) ...[
+                      headerRow,
+                      SizedBox(height: gap + 2),
+                    ],
+                    ...gapped(children, gap),
                   ],
-                  ...gapped(children, gap),
-                ],
+                ),
               ),
             ),
           ),
@@ -88,6 +101,12 @@ class SteadyPage extends StatelessWidget {
     );
   }
 }
+
+/// [list] with pull-to-refresh when [onRefresh] is set.
+Widget _refreshable(RefreshCallback? onRefresh, double top, Widget list) =>
+    onRefresh == null
+    ? list
+    : RefreshIndicator(onRefresh: onRefresh, edgeOffset: top, child: list);
 
 enum PageLeading { back, close, none }
 
@@ -529,6 +548,8 @@ class SteadyChip extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.height = 40,
+    this.onLongPress,
+    this.longPressHint,
   });
 
   final String label;
@@ -536,12 +557,29 @@ class SteadyChip extends StatelessWidget {
   final VoidCallback onTap;
   final double height;
 
+  /// E.g. delete. [longPressHint] tells screen readers what it does.
+  final VoidCallback? onLongPress;
+  final String? longPressHint;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    // A selection tick, like the system pickers.
+    void tap() {
+      HapticFeedback.selectionClick();
+      onTap();
+    }
+
+    void longPress() {
+      HapticFeedback.mediumImpact();
+      onLongPress!();
+    }
+
     return _TouchPad(
       height: height,
-      onTap: onTap,
+      onTap: tap,
+      onLongPress: onLongPress == null ? null : longPress,
+      longPressHint: longPressHint,
       button: true,
       selected: selected,
       child: Material(
@@ -553,7 +591,8 @@ class SteadyChip extends StatelessWidget {
         ),
         child: InkWell(
           customBorder: const StadiumBorder(),
-          onTap: onTap,
+          onTap: tap,
+          onLongPress: onLongPress == null ? null : longPress,
           child: Container(
             height: height,
             constraints: const BoxConstraints(
@@ -589,6 +628,9 @@ class ChipGroup<T> extends StatelessWidget {
     required this.labelOf,
     this.label,
     this.height = 40,
+    this.trailing,
+    this.onLongPress,
+    this.longPressHint,
   });
 
   final List<T> options;
@@ -597,6 +639,14 @@ class ChipGroup<T> extends StatelessWidget {
   final String Function(T) labelOf;
   final String? label;
   final double height;
+
+  /// After the options, e.g. an [AddChip] ("+ New").
+  final Widget? trailing;
+
+  /// Long-pressing an option (e.g. to delete it); [longPressHint] is read
+  /// out by screen readers.
+  final ValueChanged<T>? onLongPress;
+  final String? longPressHint;
 
   @override
   Widget build(BuildContext context) {
@@ -611,7 +661,10 @@ class ChipGroup<T> extends StatelessWidget {
             selected: o == selected,
             onTap: () => onSelected(o),
             height: height,
+            onLongPress: onLongPress == null ? null : () => onLongPress!(o),
+            longPressHint: longPressHint,
           ),
+        ?trailing,
       ],
     );
     if (label == null) return wrap;
@@ -677,6 +730,8 @@ class _TouchPad extends StatelessWidget {
     required this.child,
     this.button = false,
     this.selected,
+    this.onLongPress,
+    this.longPressHint,
   });
 
   final double height;
@@ -684,6 +739,8 @@ class _TouchPad extends StatelessWidget {
   final Widget child;
   final bool button;
   final bool? selected;
+  final VoidCallback? onLongPress;
+  final String? longPressHint;
 
   @override
   Widget build(BuildContext context) {
@@ -691,10 +748,12 @@ class _TouchPad extends StatelessWidget {
     return Semantics(
       button: button,
       selected: selected,
+      onLongPressHint: onLongPress == null ? null : longPressHint,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         excludeFromSemantics: true,
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: pad),
           child: child,
@@ -1009,19 +1068,44 @@ class Panel extends StatelessWidget {
           ? BorderSide.none
           : BorderSide(color: borderColor ?? c.line, width: borderWidth),
     );
-    return Material(
-      color: color ?? c.surface,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      child: onTap == null
-          ? Padding(padding: padding, child: child)
-          : InkWell(
-              onTap: onTap,
-              child: Padding(padding: padding, child: child),
-            ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: cardShadow(context),
+      ),
+      child: Material(
+        color: color ?? c.surface,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: onTap == null
+            ? Padding(padding: padding, child: child)
+            : InkWell(
+                onTap: onTap,
+                child: Padding(padding: padding, child: child),
+              ),
+      ),
     );
   }
 }
+
+/// The soft shadow under cards: barely there in light mode; deeper and
+/// wider in dark mode, where flat cards would melt into the background.
+List<BoxShadow> cardShadow(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? const [
+        BoxShadow(
+          color: Color(0x47000000),
+          blurRadius: 18,
+          offset: Offset(0, 6),
+        ),
+      ]
+    : const [
+        BoxShadow(
+          color: Color(0x0F1F2A25),
+          blurRadius: 14,
+          offset: Offset(0, 4),
+        ),
+      ];
 
 /// Soft colored banner with optional leading icon (tips, warnings, info).
 enum BannerTone { primary, warning, danger, info, neutral }
@@ -1660,8 +1744,9 @@ class Bar extends StatelessWidget {
         height: height,
         color: track ?? c.progressTrack,
         alignment: Alignment.centerLeft,
+        // Fills from empty when it first appears, then animates changes.
         child: TweenAnimationBuilder<double>(
-          tween: Tween(end: value.clamp(0.0, 1.0)),
+          tween: Tween(begin: 0, end: value.clamp(0.0, 1.0)),
           duration: reduce ? SteadyMotion.reduced : SteadyMotion.progress,
           curve: SteadyMotion.progressCurve,
           builder: (context, v, _) => FractionallySizedBox(
@@ -1783,10 +1868,11 @@ class Skeleton extends StatefulWidget {
 
 class _SkeletonState extends State<Skeleton>
     with SingleTickerProviderStateMixin {
+  // One sweep of light across the bone every 1.3 s.
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 700),
-  )..repeat(reverse: true);
+    duration: const Duration(milliseconds: 1300),
+  )..repeat();
 
   @override
   void dispose() {
@@ -1806,12 +1892,25 @@ class _SkeletonState extends State<Skeleton>
       ),
     );
     if (reduce) return box;
-    return FadeTransition(
-      opacity: Tween(
-        begin: .55,
-        end: 1.0,
-      ).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut)),
+    // Shimmer: a soft band of light moving left to right over the bone.
+    final light = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white.withValues(alpha: .10)
+        : Colors.white.withValues(alpha: .55);
+    return AnimatedBuilder(
+      animation: _c,
       child: box,
+      builder: (context, child) {
+        final x = -1.5 + 3 * _c.value; // band centre, in box widths
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (rect) => LinearGradient(
+            begin: Alignment(x - 1, 0),
+            end: Alignment(x + 1, 0),
+            colors: [Colors.transparent, light, Colors.transparent],
+          ).createShader(rect),
+          child: child,
+        );
+      },
     );
   }
 }
@@ -1859,24 +1958,33 @@ class SplitBar extends StatelessWidget {
 /// Scrolling body for a tab screen: clears the status bar and the floating
 /// tab bar (Handoff 1: 100 bottom padding).
 class TabBody extends StatelessWidget {
-  const TabBody({super.key, required this.children, this.gap = SteadySpace.s4});
+  const TabBody({
+    super.key,
+    required this.children,
+    this.gap = SteadySpace.s4,
+    this.onRefresh,
+  });
   final List<Widget> children;
   final double gap;
+
+  /// Pull down to refresh, when set.
+  final RefreshCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
-    return StatusBarScrim(
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          SteadySpace.screenMargin,
-          pad.top + SteadySpace.s3,
-          SteadySpace.screenMargin,
-          SteadySize.tabBarClearance(pad),
-        ),
-        children: gapped(children, gap),
+    final list = ListView(
+      // Pull-to-refresh needs to scroll even when everything fits.
+      physics: onRefresh == null ? null : const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        SteadySpace.screenMargin,
+        pad.top + SteadySpace.s3,
+        SteadySpace.screenMargin,
+        SteadySize.tabBarClearance(pad),
       ),
+      children: gapped(children, gap),
     );
+    return StatusBarScrim(child: _refreshable(onRefresh, pad.top, list));
   }
 }
 

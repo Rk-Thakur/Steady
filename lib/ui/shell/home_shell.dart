@@ -114,13 +114,16 @@ class _HomeShellState extends State<HomeShell> {
             child: IndexedStack(
               index: _tab.index,
               children: [
-                TodayScreen(
-                  onLogSpend: _openLogSpend,
-                  onOpenBills: () => _select(ShellTab.bills),
-                ),
-                const BillsScreen(),
-                const VaultScreen(),
-                const InsightsScreen(),
+                for (final (i, page) in [
+                  TodayScreen(
+                    onLogSpend: _openLogSpend,
+                    onOpenBills: () => _select(ShellTab.bills),
+                  ),
+                  const BillsScreen(),
+                  const VaultScreen(),
+                  const InsightsScreen(),
+                ].indexed)
+                  _TabFadeIn(active: i == _tab.index, child: page),
               ],
             ),
           ),
@@ -255,4 +258,54 @@ class _TabItem extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A tab easing in when it's chosen: a quick fade with a slight rise. Tabs
+/// keep their state (scroll position) between visits. With "reduce motion"
+/// on, tabs switch instantly.
+class _TabFadeIn extends StatefulWidget {
+  const _TabFadeIn({required this.active, required this.child});
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_TabFadeIn> createState() => _TabFadeInState();
+}
+
+class _TabFadeInState extends State<_TabFadeIn>
+    with SingleTickerProviderStateMixin {
+  late final _in = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+    value: 1, // the first tab is simply there at launch
+  );
+  late final _curve = CurvedAnimation(parent: _in, curve: Curves.easeOutCubic);
+  late final _rise = Tween(
+    begin: const Offset(0, .02),
+    end: Offset.zero,
+  ).animate(_curve);
+
+  @override
+  void didUpdateWidget(_TabFadeIn old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _in.value = 1;
+      } else {
+        _in.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _in.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _curve,
+    child: SlideTransition(position: _rise, child: widget.child),
+  );
 }

@@ -10,6 +10,7 @@ import '../../domain/split_math.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
+import '../widgets/empty_state.dart';
 
 /// Split expenses in groups (a partner, flatmates, a trip). The people are
 /// just names on this phone; you're the bookkeeper.
@@ -50,11 +51,14 @@ class SplitsScreen extends StatelessWidget {
       ),
       children: [
         if (book.groups.isEmpty)
-          Text(
-            'Make a group for anyone you share costs with: a partner, '
-            'flatmates, a trip. They don\'t need the app, and nothing leaves '
-            'this phone.',
-            style: SteadyType.body.copyWith(color: c.muted, height: 1.5),
+          const EmptyState(
+            icon: Icons.people_outline_rounded,
+            tone: BannerTone.warning,
+            title: 'Share costs, fairly',
+            body:
+                'Make a group for anyone you share costs with: a partner, '
+                'flatmates, a trip. They don\'t need the app, and nothing '
+                'leaves this phone.',
           )
         else ...[
           Container(
@@ -591,9 +595,11 @@ class SplitGroupScreen extends StatelessWidget {
         ),
         const Overline('Expenses'),
         if (expenses.isEmpty)
-          Text(
-            'Nothing yet. Add what someone paid for the group.',
-            style: SteadyType.body.copyWith(color: c.muted),
+          const EmptyState(
+            compact: true,
+            icon: Icons.receipt_long_outlined,
+            title: 'No expenses yet',
+            body: 'Add what someone paid for the group.',
           )
         else
           GroupedList(

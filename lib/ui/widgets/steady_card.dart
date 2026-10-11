@@ -23,6 +23,7 @@ class SteadyCard extends StatelessWidget {
         color: c.surface,
         border: Border.all(color: c.line),
         borderRadius: BorderRadius.circular(SteadyRadius.lg),
+        boxShadow: cardShadow(context),
       ),
       child: child,
     );

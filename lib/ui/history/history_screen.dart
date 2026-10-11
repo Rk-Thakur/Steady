@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
-import '../../core/money.dart';
 import '../../data/budget_store.dart';
 import '../../data/store_scope.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
+import '../widgets/entry_tile.dart';
 import '../widgets/kit.dart';
-import '../widgets/tones.dart';
+import '../widgets/empty_state.dart';
 
 /// V3 History: every entry by day, searchable and filterable.
 class HistoryScreen extends StatefulWidget {
@@ -48,6 +49,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       groups.putIfAbsent(e.localDate, () => []).add(e);
     }
 
+    var row = 0;
+
     String dayLabel(LocalDate d) {
       final diff = d.daysUntil(store.today);
       if (diff == 0) return 'Today · ${formatShortDay(d)}';
@@ -57,6 +60,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return SteadyPage(
       title: 'History',
+      // Pull down: catch up on the date and recalculate.
+      onRefresh: () async => store.onClockTick(),
       gap: 14,
       children: [
         SteadyField(
@@ -77,16 +82,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
           onSelected: (f) => setState(() => _filter = f),
         ),
         if (groups.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: SteadySpace.s7),
-            child: Text(
-              _query.isEmpty
-                  ? 'Nothing logged yet.'
-                  : 'No entries match "$_query".',
-              textAlign: TextAlign.center,
-              style: SteadyType.body.copyWith(color: c.muted),
-            ),
-          ),
+          _query.isEmpty
+              ? const EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Nothing logged yet',
+                  body: 'Spends and income you log show up here, newest first.',
+                )
+              : EmptyState(
+                  icon: Icons.search_off_rounded,
+                  tone: BannerTone.neutral,
+                  title: 'No matches',
+                  body:
+                      'Nothing matches "$_query". Try a shop, a category or '
+                      'a mood.',
+                ),
         for (final day in groups.keys)
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -109,7 +118,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       if (i > 0) Divider(color: c.lineSoft, height: 1),
                       SwipeToDelete(
                         entry: groups[day]![i],
-                        child: HistoryRow(entry: groups[day]![i]),
+                        child: EntryTile(
+                          key: ValueKey(groups[day]![i].id),
+                          entry: groups[day]![i],
+                          // One cascade down the whole list, not per day.
+                          index: row++,
+                          onTap: () => Navigator.of(context).pushNamed(
+                            Routes.editEntry,
+                            arguments: groups[day]![i].id,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -118,93 +136,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ],
           ),
       ],
-    );
-  }
-}
-
-/// Tappable entry row → Edit entry.
-class HistoryRow extends StatelessWidget {
-  const HistoryRow({super.key, required this.entry});
-  final Entry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final store = StoreScope.of(context);
-    final c = context.colors;
-    final cat = store.categoryById(entry.categoryId);
-    final title =
-        entry.merchant ?? cat?.name ?? (entry.isIncome ? 'Income' : 'Spend');
-    final meta = <String>[
-      if (entry.isIncome) ...[
-        'Income',
-        entry.toVault ? 'to Vault' : 'to today',
-      ],
-      if (entry.isSpend && cat != null) cat.name,
-      if (entry.mood != null) entry.mood!.label,
-      if (entry.splitId != null)
-        'shared · ${store.splits.group(entry.splitId!)?.name ?? 'split'}',
-      if (entry.isSpend && entry.planned == false && entry.mood == null)
-        'unplanned',
-      if (entry.isSpend && entry.planned == true && entry.splitId == null)
-        'planned',
-    ].join(' · ');
-    final amount = entry.isSpend
-        ? formatMoney(-entry.amountCents, symbol: store.symbol)
-        : formatMoney(entry.amountCents, symbol: store.symbol, signed: true);
-
-    return InkWell(
-      onTap: () =>
-          Navigator.of(context)
-              .pushNamed(Routes.editEntry, arguments: entry.id),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 60),
-        child: Row(
-          children: [
-            LetterTile(
-              letter: title,
-              tone: entry.isIncome ? BannerTone.primary : toneOf(cat?.tone),
-            ),
-            const SizedBox(width: SteadySpace.s3),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: SteadySpace.s2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: SteadyType.body.copyWith(
-                        fontWeight: FontWeight.w700,
-                        height: 1.3,
-                      ),
-                    ),
-                    if (meta.isNotEmpty)
-                      Text(
-                        meta,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: SteadyType.caption.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: c.muted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: SteadySpace.s2),
-            Text(
-              amount,
-              style: SteadyType.body.copyWith(
-                fontWeight: FontWeight.w800,
-                color: entry.isIncome ? c.positive : c.ink,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -254,6 +185,7 @@ class SwipeToDelete extends StatelessWidget {
         ),
       ),
       onDismissed: (_) {
+        HapticFeedback.mediumImpact();
         store.removeEntry(entry.id);
         final name = entry.merchant ?? 'Entry';
         ScaffoldMessenger.of(context)

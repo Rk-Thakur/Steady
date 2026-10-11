@@ -306,12 +306,9 @@ void main() {
       find.textContaining(r'keep $90.00 in your account', skipOffstage: false),
       findsOneWidget,
     );
+    expect(find.text('Storage Unit', skipOffstage: false), findsOneWidget);
     expect(
-      find.text(
-        'Storage unit · Oct 16 · the day after payday',
-        findRichText: true,
-        skipOffstage: false,
-      ),
+      find.text('Oct 16 · the day after payday', skipOffstage: false),
       findsOneWidget,
     );
   });

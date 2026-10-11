@@ -5,6 +5,8 @@ import '../../core/money.dart';
 import '../../data/store_scope.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
+import '../routes.dart';
+import '../settings/category_edit_screen.dart';
 import '../widgets/kit.dart';
 
 /// V4 Edit entry. Saving or deleting recalculates the daily number.
@@ -153,8 +155,30 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
             label: 'Category',
             options: [for (final c in categories) c.id],
             selected: _categoryId,
+            onLongPress: (id) async {
+              final cat = store.categoryById(id);
+              if (cat == null) return;
+              // No Undo bar here: it would cover Save. The sheet asks first.
+              final deleted = await deleteCategoryFlow(
+                context,
+                cat,
+                undo: false,
+              );
+              if (deleted && _categoryId == id && mounted) {
+                setState(() => _categoryId = null);
+              }
+            },
+            longPressHint: 'Delete category',
             labelOf: (id) => store.categoryById(id)?.name ?? id,
             onSelected: (id) => setState(() => _categoryId = id),
+            trailing: AddChip(
+              label: '+ New',
+              onTap: () async {
+                final id = await Navigator.of(context)
+                    .pushNamed(Routes.categoryEdit);
+                if (id is String && mounted) setState(() => _categoryId = id);
+              },
+            ),
           ),
           ChipGroup<Mood>(
             label: 'Mood',

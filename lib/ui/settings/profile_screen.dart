@@ -129,9 +129,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         ChipGroup<int>(
           label: 'Week starts on',
-          options: const [DateTime.sunday, DateTime.monday],
+          // Any day: weekly summaries and the recap follow it.
+          options: const [
+            DateTime.monday,
+            DateTime.tuesday,
+            DateTime.wednesday,
+            DateTime.thursday,
+            DateTime.friday,
+            DateTime.saturday,
+            DateTime.sunday,
+          ],
           selected: _s.weekStartsOn,
-          labelOf: (d) => d == DateTime.sunday ? 'Sun' : 'Mon',
+          labelOf: (d) => weekdayName(d).substring(0, 3),
           onSelected: (d) => setState(() => _s = _s.copyWith(weekStartsOn: d)),
         ),
         ChipGroup<Currency>(

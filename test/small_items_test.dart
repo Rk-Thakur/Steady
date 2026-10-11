@@ -23,7 +23,42 @@ class _BlockedNotifications implements Notifications {
   @override
   Future<bool> permissionGranted() async => false;
   @override
+  Future<bool> onTime() async => true;
+  @override
+  Future<void> askForOnTime() async {}
+  @override
   Future<void> replaceAll(List<PlannedNotification> plan) async {}
+  @override
+  Future<List<DeliveredNotification>> delivered() async => const [];
+  @override
+  Future<void> clearDelivered(Iterable<int> ids) async {}
+}
+
+/// Android without "Alarms & reminders": allowed, but not on time.
+class _LateNotifications implements Notifications {
+  int asked = 0;
+  @override
+  bool get enabled => true;
+  @override
+  Future<void> init() async {}
+  @override
+  Stream<String> get taps => const Stream.empty();
+  @override
+  Future<String?> launchRoute() async => null;
+  @override
+  Future<bool> requestPermission() async => true;
+  @override
+  Future<bool> permissionGranted() async => true;
+  @override
+  Future<bool> onTime() async => false;
+  @override
+  Future<void> askForOnTime() async => asked++;
+  @override
+  Future<void> replaceAll(List<PlannedNotification> plan) async {}
+  @override
+  Future<List<DeliveredNotification>> delivered() async => const [];
+  @override
+  Future<void> clearDelivered(Iterable<int> ids) async {}
 }
 
 void main() {
@@ -140,6 +175,54 @@ void main() {
     });
   });
 
+  testWidgets('coming back to the app (e.g. from a notification) on Settings '
+      'is error-free', (tester) async {
+    final store = BudgetStore.sample(clock: () => oct2);
+    store.updateSettings(
+      store.settings.copyWith(appLockEnabled: true, pin: () => '1234'),
+    );
+    await open(tester, Routes.settings, store: store);
+    final binding = tester.binding;
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Reminders'), findsOneWidget);
+  });
+
+  testWidgets('Android, not on time: Reminders explains and asks', (
+    tester,
+  ) async {
+    final late = _LateNotifications();
+    Notifications.instance = late;
+    addTearDown(() => Notifications.instance = const _Stub());
+    final store = BudgetStore.sample(clock: () => oct2);
+    store.updateSettings(
+      store.settings.copyWith(
+        reminders: store.settings.reminders.copyWith(logSpends: true),
+      ),
+    );
+    await open(tester, Routes.reminders, store: store);
+    expect(
+      find.textContaining(
+        'Reminders may arrive up to an hour late.',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Allow'));
+    await tester.pumpAndSettle();
+    expect(late.asked, 1);
+  });
+
   testWidgets('App lock off: the hint mentions Face ID / fingerprint', (
     tester,
   ) async {
@@ -167,5 +250,13 @@ class _Stub implements Notifications {
   @override
   Future<bool> permissionGranted() async => false;
   @override
+  Future<bool> onTime() async => true;
+  @override
+  Future<void> askForOnTime() async {}
+  @override
   Future<void> replaceAll(List<PlannedNotification> plan) async {}
+  @override
+  Future<List<DeliveredNotification>> delivered() async => const [];
+  @override
+  Future<void> clearDelivered(Iterable<int> ids) async {}
 }

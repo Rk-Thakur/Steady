@@ -5,6 +5,7 @@ import 'package:steady/core/local_date.dart';
 import 'package:steady/data/budget_store.dart';
 import 'package:steady/data/db/budget_repository.dart';
 import 'package:steady/data/db/database_key.dart';
+import 'package:steady/ui/today/today_states.dart';
 
 void main() {
   const oct2 = LocalDate(2026, 10, 2);
@@ -81,5 +82,48 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
     }
     expect(find.text(r'$46.20'), findsOneWidget);
+  });
+
+  testWidgets('a slow phone sees Today taking shape, then the app', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      SteadyBootstrap(
+        open: () async {
+          await Future<void>.delayed(const Duration(seconds: 3));
+          return BudgetStore.sample(clock: () => oct2);
+        },
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(find.byType(TodayLoadingBody), findsNothing); // still the logo
+    await tester.pump(const Duration(milliseconds: 700)); // past 1.2 s
+    await tester.pump(const Duration(milliseconds: 300)); // cross-fade
+    expect(find.byType(TodayLoadingBody), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2)); // opened
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(TodayLoadingBody), findsNothing);
+    expect(find.text('Safe to spend today'), findsOneWidget);
+  });
+
+  testWidgets('a fast phone never sees the skeleton', (tester) async {
+    var sawSkeleton = false;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      SteadyBootstrap(open: () async => BudgetStore.sample(clock: () => oct2)),
+    );
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 150));
+      if (find.byType(TodayLoadingBody).evaluate().isNotEmpty) {
+        sawSkeleton = true;
+      }
+    }
+    expect(sawSkeleton, isFalse);
+    expect(find.text('Safe to spend today'), findsOneWidget);
   });
 }

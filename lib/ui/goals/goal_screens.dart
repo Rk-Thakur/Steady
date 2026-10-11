@@ -12,6 +12,8 @@ import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
+import '../widgets/confetti.dart';
+import '../widgets/empty_state.dart';
 
 BannerTone _toneOf(GoalKind kind) => switch (kind) {
   GoalKind.safety => BannerTone.primary,
@@ -123,9 +125,12 @@ class GoalsScreen extends StatelessWidget {
           ),
         ),
         if (store.goals.isEmpty)
-          Text(
-            'No goals yet. Start one and it comes out of your daily number automatically.',
-            style: SteadyType.body.copyWith(color: c.muted),
+          const EmptyState(
+            icon: Icons.flag_outlined,
+            title: 'No goals yet',
+            body:
+                'Start one and a little comes out of your daily number each '
+                'day, then moves into the goal on payday.',
           ),
         for (final g in store.goals)
           Panel(
@@ -541,6 +546,20 @@ class GoalDetailScreen extends StatelessWidget {
       if (updated.isReached) {
         Navigator.of(context)
             .pushReplacementNamed(Routes.goalDone, arguments: g.id);
+      } else if (_milestone(updated.progress) > _milestone(g.progress)) {
+        // Past 25%, 50% or 75%: a little celebration.
+        showConfetti(context);
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(switch (_milestone(updated.progress)) {
+                1 => 'A quarter of the way there!',
+                2 => 'Halfway there!',
+                _ => 'Three-quarters there. Nearly done!',
+              }),
+            ),
+          );
       }
     }
 
@@ -734,6 +753,9 @@ class _MilestoneBar extends StatelessWidget {
   }
 }
 
+/// 0 below 25%, then 1, 2, 3 at 25%, 50%, 75%.
+int _milestone(double progress) => (progress * 4).floor().clamp(0, 3);
+
 // ─── G4 Goal reached ───────────────────────────────────────────────────────
 
 class GoalDoneScreen extends StatefulWidget {
@@ -751,6 +773,15 @@ class _GoalDoneScreenState extends State<GoalDoneScreen>
     vsync: this,
     duration: const Duration(milliseconds: 1200),
   )..forward();
+
+  @override
+  void initState() {
+    super.initState();
+    // The big burst, once the screen is up.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showConfetti(context, big: true);
+    });
+  }
 
   @override
   void dispose() {

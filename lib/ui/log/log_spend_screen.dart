@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/date_format.dart';
 import '../../core/money.dart';
@@ -9,6 +10,7 @@ import '../../domain/category_cover.dart';
 import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
+import '../settings/category_edit_screen.dart';
 import '../widgets/kit.dart';
 
 /// 03 Log spend + mood. Amount is focused on open (Handoff 2 · Gestures).
@@ -59,7 +61,8 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
               0,
               merchant.length.clamp(0, Entry.maxMerchantLength),
             ),
-      categoryId: _categoryId,
+      // Food is the default; it may have been deleted.
+      categoryId: store.categoryById(_categoryId) == null ? null : _categoryId,
       mood: _mood,
       planned: _planned,
     );
@@ -85,6 +88,7 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
         return;
       }
     }
+    HapticFeedback.lightImpact();
     store.addEntry(entry);
     if (mounted) Navigator.of(context).pop();
   }
@@ -261,8 +265,26 @@ class _LogSpendScreenState extends State<LogSpendScreen> {
           label: 'Category',
           options: [for (final c in categories) c.id],
           selected: _categoryId,
+          onLongPress: (id) async {
+            final cat = store.categoryById(id);
+            if (cat == null) return;
+            // No Undo bar here: it would cover Save. The sheet asks first.
+            final deleted = await deleteCategoryFlow(context, cat, undo: false);
+            if (deleted && _categoryId == id && mounted) {
+              setState(() => _categoryId = null);
+            }
+          },
+          longPressHint: 'Delete category',
           labelOf: (id) => store.categoryById(id)?.name ?? id,
           onSelected: (id) => setState(() => _categoryId = id),
+          trailing: AddChip(
+            label: '+ New',
+            onTap: () async {
+              final id = await Navigator.of(context)
+                  .pushNamed(Routes.categoryEdit);
+              if (id is String && mounted) setState(() => _categoryId = id);
+            },
+          ),
         ),
         ?_limitLine(store, draft),
         ChipGroup<Mood>(

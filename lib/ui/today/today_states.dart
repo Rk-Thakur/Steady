@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
@@ -287,6 +288,7 @@ class _TodayCatchUpBodyState extends State<TodayCatchUpBody> {
   void _noSpends(BudgetStore store, LocalDate day, List<LocalDate> missed) {
     setState(() => _nothing.add(day));
     if (widget.demoMissed != null || !missed.every(_nothing.contains)) return;
+    HapticFeedback.mediumImpact();
     store.markCaughtUp();
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(

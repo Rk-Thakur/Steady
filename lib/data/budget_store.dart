@@ -746,6 +746,20 @@ class BudgetStore extends ChangeNotifier {
     _save((r) => r.deleteCategory(id));
   }
 
+  /// Undo for [removeCategory]: back where it was. Its entries never lost
+  /// their link to it, so they're in it again too.
+  void restoreCategory(BudgetCategory category, int at) {
+    if (_categories.any((c) => c.id == category.id)) return;
+    _categories.insert(at.clamp(0, _categories.length), category);
+    notifyListeners();
+    final all = List.of(_categories);
+    _save((r) async {
+      for (var i = 0; i < all.length; i++) {
+        await r.upsertCategory(all[i], sortOrder: i);
+      }
+    });
+  }
+
   /// A new goal holds back its daily set-aside from today to payday, so
   /// today's number drops by about that much straight away.
   void addGoal(Goal goal) {

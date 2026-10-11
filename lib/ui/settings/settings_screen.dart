@@ -257,8 +257,10 @@ class _RemindersRow extends StatefulWidget {
 class _RemindersRowState extends State<_RemindersRow> {
   late Future<bool> _allowed = Notifications.instance.permissionGranted();
   late final _lifecycle = AppLifecycleListener(
-    onResume: () =>
-        setState(() => _allowed = Notifications.instance.permissionGranted()),
+    // A block body: an arrow would return the Future, which setState rejects.
+    onResume: () => setState(() {
+      _allowed = Notifications.instance.permissionGranted();
+    }),
   );
 
   @override
@@ -310,7 +312,9 @@ class _BiometricRow extends StatefulWidget {
 class _BiometricRowState extends State<_BiometricRow> {
   late Future<(String?, bool)> _check = _run();
   late final _lifecycle = AppLifecycleListener(
-    onResume: () => setState(() => _check = _run()),
+    onResume: () => setState(() {
+      _check = _run();
+    }),
   );
 
   static Future<(String?, bool)> _run() async => (

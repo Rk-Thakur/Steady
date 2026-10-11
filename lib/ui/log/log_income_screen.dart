@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/money.dart';
 import '../../data/store_scope.dart';
@@ -74,6 +75,7 @@ class _LogIncomeScreenState extends State<LogIncomeScreen> {
     void save() {
       final entry = _draft(store.newId('income'), toVault);
       if (entry == null) return;
+      HapticFeedback.lightImpact();
       store.addEntry(entry);
       // Design: Save to Vault lands on the Vault; Save income on Today.
       goToTab(context, toVault ? ShellTab.vault : ShellTab.today);

@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/date_format.dart';
 import '../../core/local_date.dart';
@@ -41,7 +44,7 @@ class HeroCard extends StatelessWidget {
         ? 'Spent ${money(number.spentTodayCents)} of ${money(number.dailyAllowanceCents)} today'
         : 'Spent ${money(number.spentTodayCents)} of ${money(number.dailyAllowanceCents)}';
 
-    return Semantics(
+    final card = Semantics(
       button: onTap != null,
       label:
           'Safe to spend today, ${money(number.safeToSpendCents)}. '
@@ -59,110 +62,137 @@ class HeroCard extends StatelessWidget {
               : BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(SteadySpace.s5),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              'Safe to spend today',
-                              style: SteadyType.body.copyWith(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: fg,
+        // A soft diagonal gradient (deeper toward the corner); white text
+        // keeps its contrast. In dark mode a faint top edge lifts it off
+        // the background.
+        child: Ink(
+          decoration: over
+              ? null
+              : BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [c.hero, Color.lerp(c.hero, Colors.black, .22)!],
+                  ),
+                  border: Theme.of(context).brightness == Brightness.dark
+                      ? Border(
+                          top: BorderSide(
+                            color: Colors.white.withValues(alpha: .10),
+                          ),
+                        )
+                      : null,
+                ),
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(SteadySpace.s5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Safe to spend today',
+                                style: SteadyType.body.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: fg,
+                                ),
                               ),
                             ),
-                          ),
-                          // Tapping the card explains the number; this says so.
-                          if (onTap != null) ...[
-                            const SizedBox(width: SteadySpace.s1),
-                            Icon(
-                              Icons.info_outline_rounded,
-                              size: 16,
-                              color: fgMuted,
-                            ),
+                            // Tapping the card explains the number; this says so.
+                            if (onTap != null) ...[
+                              const SizedBox(width: SteadySpace.s1),
+                              Icon(
+                                Icons.info_outline_rounded,
+                                size: 16,
+                                color: fgMuted,
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
+                      ),
+                      over
+                          ? _StatusPill(
+                              label:
+                                  'Over by ${money(number.overspentByCents)}',
+                              background: c.dangerBg,
+                              foreground: c.dangerFg,
+                              icon: Icons.priority_high_rounded,
+                            )
+                          : _StatusPill(
+                              label: 'On track',
+                              background: c.highlight,
+                              foreground: c.onHighlight,
+                            ),
+                    ],
+                  ),
+                  const SizedBox(height: SteadySpace.s3),
+                  _AnimatedAmount(
+                    cents: number.safeToSpendCents,
+                    symbol: symbol,
+                    color: amountColor,
+                    duration: reduceMotion
+                        ? SteadyMotion.reduced
+                        : SteadyMotion.heroNumber,
+                  ),
+                  if (!over) ...[
+                    const SizedBox(height: SteadySpace.s3),
+                    Text(
+                      'Bills, savings & goals already set aside',
+                      style: SteadyType.caption.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: fgMuted,
                       ),
                     ),
-                    over
-                        ? _StatusPill(
-                            label: 'Over by ${money(number.overspentByCents)}',
-                            background: c.dangerBg,
-                            foreground: c.dangerFg,
-                            icon: Icons.priority_high_rounded,
-                          )
-                        : _StatusPill(
-                            label: 'On track',
-                            background: c.highlight,
-                            foreground: c.onHighlight,
-                          ),
+                    if (change case final change?) ...[
+                      const SizedBox(height: SteadySpace.s1),
+                      Text(
+                        change,
+                        style: SteadyType.caption.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: fg,
+                        ),
+                      ),
+                    ],
                   ],
-                ),
-                const SizedBox(height: SteadySpace.s3),
-                _AnimatedAmount(
-                  cents: number.safeToSpendCents,
-                  symbol: symbol,
-                  color: amountColor,
-                  duration: reduceMotion
-                      ? SteadyMotion.reduced
-                      : SteadyMotion.heroNumber,
-                ),
-                if (!over) ...[
                   const SizedBox(height: SteadySpace.s3),
-                  Text(
-                    'Bills, savings & goals already set aside',
+                  _ProgressBar(
+                    value: number.spentFraction,
+                    track: over ? c.dangerBg : c.heroTrack,
+                    fill: over ? c.dangerFg : c.highlight,
+                    duration: reduceMotion
+                        ? SteadyMotion.reduced
+                        : SteadyMotion.progress,
+                  ),
+                  const SizedBox(height: SteadySpace.s3),
+                  DefaultTextStyle(
                     style: SteadyType.caption.copyWith(
                       fontWeight: FontWeight.w500,
                       color: fgMuted,
                     ),
-                  ),
-                  if (change case final change?) ...[
-                    const SizedBox(height: SteadySpace.s1),
-                    Text(
-                      change,
-                      style: SteadyType.caption.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: fg,
-                      ),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(spentLine)),
+                        if (!over) Text('Payday ${formatShortDate(payday)}'),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
-                const SizedBox(height: SteadySpace.s3),
-                _ProgressBar(
-                  value: number.spentFraction,
-                  track: over ? c.dangerBg : c.heroTrack,
-                  fill: over ? c.dangerFg : c.highlight,
-                  duration: reduceMotion
-                      ? SteadyMotion.reduced
-                      : SteadyMotion.progress,
-                ),
-                const SizedBox(height: SteadySpace.s3),
-                DefaultTextStyle(
-                  style: SteadyType.caption.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: fgMuted,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(spentLine)),
-                      if (!over) Text('Payday ${formatShortDate(payday)}'),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
+    );
+    return HeroReaction(
+      cents: number.safeToSpendCents,
+      over: over,
+      child: card,
     );
   }
 }
@@ -272,7 +302,8 @@ class _ProgressBar extends StatelessWidget {
         child: ColoredBox(
           color: track,
           child: TweenAnimationBuilder<double>(
-            tween: Tween(end: value),
+            // Fills from empty on open, then animates each spend.
+            tween: Tween(begin: 0, end: value),
             duration: duration,
             curve: SteadyMotion.progressCurve,
             builder: (context, v, _) => FractionallySizedBox(
@@ -283,6 +314,95 @@ class _ProgressBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The hero reacting to its number: a gentle pulse and glow when it goes up
+/// (income logged, a spend deleted), and a short shake with a firm tap when
+/// it tips into overspent. With "reduce motion" on, it just updates.
+class HeroReaction extends StatefulWidget {
+  const HeroReaction({
+    super.key,
+    required this.cents,
+    required this.over,
+    required this.child,
+  });
+
+  final int cents;
+  final bool over;
+  final Widget child;
+
+  @override
+  State<HeroReaction> createState() => _HeroReactionState();
+}
+
+class _HeroReactionState extends State<HeroReaction>
+    with TickerProviderStateMixin {
+  late final _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+  );
+  late final _shake = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 480),
+  );
+
+  @override
+  void didUpdateWidget(HeroReaction old) {
+    super.didUpdateWidget(old);
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    if (widget.over && !old.over) {
+      HapticFeedback.mediumImpact();
+      _shake.forward(from: 0);
+    } else if (widget.cents > old.cents && !widget.over) {
+      _pulse.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    _shake.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return AnimatedBuilder(
+      animation: Listenable.merge([_pulse, _shake]),
+      child: widget.child,
+      builder: (context, child) {
+        // Up and back: 0 → 1 → 0 over the pulse.
+        final p = math.sin(_pulse.value * math.pi);
+        // A few side-to-side swings that die away.
+        final t = _shake.value;
+        final dx = _shake.isAnimating
+            ? math.sin(t * math.pi * 6) * 8 * (1 - t)
+            : 0.0;
+        return Transform.translate(
+          offset: Offset(dx, 0),
+          child: Transform.scale(
+            scale: 1 + .025 * p,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(SteadyRadius.xl),
+                boxShadow: p == 0
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: c.highlight.withValues(alpha: .45 * p),
+                          blurRadius: 28 * p,
+                          spreadRadius: 2 * p,
+                        ),
+                      ],
+              ),
+              child: child,
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 import 'tokens.dart';
+import 'transitions.dart';
 
 abstract final class AppTheme {
   static ThemeData light() => _build(SteadyColors.light, Brightness.light);
@@ -81,6 +83,15 @@ abstract final class AppTheme {
           ),
           textStyle: SteadyType.caption.copyWith(fontWeight: FontWeight.w700),
         ),
+      ),
+      // Android: shared-axis steps; iOS keeps its native slide and
+      // swipe-back.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: SharedAxisPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        },
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: c.raised,

@@ -9,6 +9,7 @@ import '../../domain/models/models.dart';
 import '../../theme/tokens.dart';
 import '../routes.dart';
 import '../widgets/kit.dart';
+import 'bill_tile.dart';
 
 /// 04 Bills radar: everything due before payday, and subscriptions to review.
 class BillsScreen extends StatefulWidget {
@@ -143,25 +144,20 @@ class _BillsScreenState extends State<BillsScreen> {
                   style: SteadyType.body.copyWith(color: c.muted),
                 ),
               ),
-            for (var i = 0; i < upcoming.length; i++) ...[
+            for (final (i, b) in upcoming.indexed) ...[
               if (i > 0) Divider(color: c.line, height: 1),
-              InkWell(
+              BillTile(
+                key: ValueKey('upcoming-${b.id}'),
+                bill: b,
+                // Every occurrence before payday (a weekly bill can be 2×).
+                amountCents: b.reservedBefore(payday),
+                today: today,
+                meta: _upcomingMeta(b, payday),
+                symbol: symbol,
+                index: i,
                 onTap: () =>
                     Navigator.of(context)
-                        .pushNamed(Routes.billEdit, arguments: upcoming[i].id),
-                child: ValueRow(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 13,
-                  ), // 48pt row: touch target
-                  label: upcoming[i].name,
-                  labelWidget: _BillLabel(
-                    bill: upcoming[i],
-                    today: today,
-                    payday: payday,
-                  ),
-                  value:
-                      '${upcoming[i].isEstimate ? '~' : ''}${m(upcoming[i].reservedBefore(payday))}',
-                ),
+                        .pushNamed(Routes.billEdit, arguments: b.id),
               ),
             ],
           ],
@@ -183,23 +179,22 @@ class _BillsScreenState extends State<BillsScreen> {
                   color: c.muted,
                 ),
               ),
-              for (var i = 0; i < afterPayday.length; i++) ...[
+              for (final (i, b) in afterPayday.indexed) ...[
                 if (i > 0) Divider(color: c.line, height: 1),
-                InkWell(
-                  onTap: () => Navigator.of(context)
-                      .pushNamed(Routes.billEdit, arguments: afterPayday[i].id),
-                  child: ValueRow(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    label: afterPayday[i].name,
-                    labelWidget: NameMeta(
-                      name: afterPayday[i].name,
-                      meta:
-                          '${formatShortDate(afterPayday[i].dueDate)} · '
-                          '${afterPaydayLabel(afterPayday[i].dueDate, payday)}',
-                    ),
-                    value:
-                        '${afterPayday[i].isEstimate ? '~' : ''}${m(afterPayday[i].amountCents)}',
-                  ),
+                BillTile(
+                  key: ValueKey('after-${b.id}'),
+                  bill: b,
+                  amountCents: b.amountCents,
+                  today: today,
+                  meta:
+                      '${formatShortDate(b.dueDate)} · '
+                      '${afterPaydayLabel(b.dueDate, payday)}',
+                  symbol: symbol,
+                  // Continues the cascade from the list above.
+                  index: upcoming.length + i,
+                  onTap: () =>
+                      Navigator.of(context)
+                          .pushNamed(Routes.billEdit, arguments: b.id),
                 ),
               ],
             ],
@@ -390,52 +385,18 @@ class _ReviewCard extends StatelessWidget {
   }
 }
 
-/// "Car insurance · Oct 8", "Electric · Oct 11 · est.", "Gym · 2× before
-/// payday", and overdue bills in the alert color.
-class _BillLabel extends StatelessWidget {
-  const _BillLabel({
-    required this.bill,
-    required this.today,
-    required this.payday,
-  });
-  final Bill bill;
-  final LocalDate today;
-  final LocalDate payday;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final times = bill.occurrencesBefore(payday).length;
-    final overdue = bill.isOverdueOn(today);
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: bill.name,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          TextSpan(
-            text: overdue
-                ? ' · overdue since ${formatShortDate(bill.dueDate)}'
-                : ' · ${formatShortDate(bill.dueDate)}',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: overdue ? FontWeight.w700 : FontWeight.w500,
-              color: overdue ? c.dangerFg : c.muted,
-            ),
-          ),
-          TextSpan(
-            text:
-                '${times > 1 ? ' · $times× before payday' : ''}${bill.isEstimate ? ' · est.' : ''}',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: c.muted,
-            ),
-          ),
-        ],
-      ),
-      style: SteadyType.body.copyWith(fontSize: 15),
-    );
-  }
+/// "Due Oct 8 · monthly · 2× before payday". Overdue shows on the tile
+/// itself (pill and "3 days late").
+String _upcomingMeta(Bill b, LocalDate payday) {
+  final times = b.occurrencesBefore(payday).length;
+  return [
+    'Due ${formatShortDate(b.dueDate)}',
+    switch (b.recurrence) {
+      Recurrence.weekly => 'weekly',
+      Recurrence.everyTwoWeeks => 'every 2 weeks',
+      Recurrence.monthly => 'monthly',
+      Recurrence.yearly => 'yearly',
+    },
+    if (times > 1) '$times× before payday',
+  ].join(' · ');
 }
